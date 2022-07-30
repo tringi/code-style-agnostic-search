@@ -15,5 +15,6 @@ TBD
 * match different order of declaration qualifiers, e.g.: `"static inline" == "inline static"`
 * match reinterpret_cast/static_cast to C-style cast
 * match curly braces and lack of them where appropriate, e.g. single statement after `if`
-* ignore unnecessary semicolons
+* ignore unnecessary semicolons, trailing commas
+* ignore accelerator prefixes (&) in strings (resource)
 * all features optional
