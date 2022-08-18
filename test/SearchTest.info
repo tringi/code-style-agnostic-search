@@ -1,0 +1,51 @@
+[generator]
+	autoincrement	= true
+
+[description]
+	product 	= AGSearchTest
+	productdescription = C++ Coding Style Agnostic Search Example
+	filename	= %targetfilename%
+	filedescription	= C++ Coding Style Agnostic Search Example
+	internalname	= SearchTest
+
+	major = 1
+	minor = 0
+	patch = 0
+	build = 164
+
+[versioninfo]
+	filename	= %dir%\%internalname%-vi.rc
+	language	= 0x0409
+	codepage	= 1200
+	manifest	= true
+	dll		= false
+	fileversion	= %major%,%minor%,%patch%,%build%
+	productversion	= %major%,%minor%,%patch%,%build%
+
+[versioninfo:values]
+	ProductName	= %product%
+	ProductVersion	= %major%.%minor%
+	ProductDescription = %productdescription%
+	FileVersion	= %major%.%minor%.%patch%.%build%
+	FileDescription	= %filedescription%
+	InternalName	= %internalname%
+	OriginalFilename= %filename%
+
+[versioninfo:ff]
+	debug		= %debug%
+	prerelease	= false
+	private		= false
+	special		= false
+
+[manifest]
+	filename	= %dir%\%internalname%.manifest
+	architecture	= %platform%
+
+	assemblyVersion		= %major%.%minor%.%patch%.%build%
+	assemblyIdentityName	= %internalname%
+	assemblyDescription	= %filedescription%
+
+	requestedExecutionLevel	= asInvoker
+	longPathAware	= True
+
+	dependentAssembly:1	= Microsoft.Windows.Common-Controls 6.0.0.0 6595b64144ccf1df

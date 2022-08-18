@@ -1,0 +1,43 @@
+#include <Windows.h>
+
+1 MENU
+LANGUAGE LANG_ENGLISH, SUBLANG_DEFAULT
+{
+    POPUP "&File"
+    {
+        MENUITEM "L&oad…\tCtrl+O", 0xC0
+        MENUITEM SEPARATOR
+        MENUITEM "Exi&t\tAlt+F4", IDCLOSE
+    }
+
+    POPUP "&About"
+    {
+        MENUITEM "&Source code…\tF1", 0xF1
+    }
+}
+
+1 ACCELERATORS
+{
+    "^O", 0xC0 // Ctrl+O
+    VK_F1, 0xF1, VIRTKEY
+}
+
+STRINGTABLE
+LANGUAGE LANG_ENGLISH, SUBLANG_DEFAULT
+{
+    1   "C++ Coding Style Agnostic Search Example"
+    2   "&Search:"
+    3   "&Parameters:"
+
+    0x0F "https://github.com/tringi/code-style-agnostic-search"
+
+    0xC1 "C++ Code (*.c;*.cpp;*.h;*hpp;*.inl;*.tcc)"
+    0xC2 "*.c;*.cpp;*.h;*hpp;*.inl;*.tcc"
+    0xC3 "Text Files (*.txt)"
+    0xC4 "*.txt"
+    0xC5 "All Files"
+    0xC6 "*.*"
+
+    1001 "Match digraphs and corresponding tokens"
+    1002 "Match ISO646 tokens and corresponding operators"
+}
