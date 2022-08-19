@@ -15,8 +15,17 @@ public:
     // parameters
     //  - 
     //
-    struct parameters {
+    struct parameter_set {
+        bool no_comment_distinction = true; // do not distinguish between regular code and commented text
+        bool no_strings_distinction = true; // do not distinguish between regular code and strings
 
+        bool case_insensitive_strings = true;
+        bool case_insensitive_comments = true;
+        bool case_insensitive_identifiers = true;
+        
+        bool fold_and_ignore_diacritics_strings = true;
+        bool fold_and_ignore_diacritics_comments = true;
+        bool fold_and_ignore_diacritics_identifiers = true;
     } parameters;
 
     // location
@@ -39,7 +48,10 @@ public:
     //  - 
     //  - string 'text' MAY contain multiple lines
     //
-    void append (std::wstring_view text);
+    void append (std::wstring_view text) {
+        this->append_text (text);
+        this->normalize ();
+    }
     
     // replace
     //  - 
@@ -54,8 +66,9 @@ public:
     void load (const Container & text) {
         this->clear ();
         for (auto & line : text) {
-            this->append (line);
+            this->append_text (line);
         }
+        this->normalize ();
     }
 
     // find
@@ -92,7 +105,17 @@ private:
     //  - invoked for every occurance of 'needle' in currently loaded source text
     //  - return 'true' to continue with search
     // 
-    virtual bool found (std::wstring_view needle, std::size_t i, location begin, location end) = 0;
+    virtual bool found (std::wstring_view needle, std::size_t i, location begin, location end) { return true; };
+
+private:
+    bool in_string = false;
+    bool in_comment = false;
+
+    void normalize ();
+    void append_text (std::wstring_view text);
+    bool compare_tokens (const token &, const token &);
+    void process_text (std::uint32_t r, std::wstring_view text);
+    void process_line (std::uint32_t r, std::wstring_view line);
 };
 
 
