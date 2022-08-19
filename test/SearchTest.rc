@@ -38,6 +38,15 @@ LANGUAGE LANG_ENGLISH, SUBLANG_DEFAULT
     0xC5 "All Files"
     0xC6 "*.*"
 
-    1001 "Match digraphs and corresponding tokens"
-    1002 "Match ISO646 tokens and corresponding operators"
+    1001 "Do not distinguish between regular code and comments"
+    1002 "Do not distinguish between code and string content"
+    1003 "Case-insensitive identifiers"
+    1004 "Case-insensitive comments"
+    1005 "Case-insensitive strings"
+    1006 "Fold and ignore diacritics in identifiers"
+    1007 "Fold and ignore diacritics in comments"
+    1008 "Fold and ignore diacritics in strings"
+
+    // 1003 "Match digraphs and corresponding tokens"
+    // 1004 "Match ISO646 tokens and corresponding operators"
 }
