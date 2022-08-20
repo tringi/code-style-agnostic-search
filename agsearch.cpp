@@ -174,7 +174,7 @@ bool agsearch::compare_tokens (const token & a, const token & b, std::uint32_t *
 
 void agsearch::process_text (std::wstring_view input) {
     auto i = std::wstring_view::npos;
-    while ((i = input.find (L'\n', i)) != std::wstring_view::npos) {
+    while ((i = input.find (L'\n', i + 1)) != std::wstring_view::npos) {
         this->process_line (input.substr (0, i));
         input.remove_prefix (i + 1);
     }
@@ -224,9 +224,9 @@ void agsearch::process_line (std::wstring_view line) {
 
     // process
 
+    bool single_line_comment = false;
     while (!line.empty ()) {
 next:
-
         // skip whitespace
 
         {   auto n = line.find_first_not_of (whitespace);
@@ -275,19 +275,57 @@ next:
 
         } else {
 
-            // if in comment, just mark token, do not make new introducing the comment
-            //  - same for strings
-            //  - configurable
-            // if " start string
-            // if /* do comments etc
-            // if "[[" then attribute?
+            // code/comment/string switching
 
-            if (line.starts_with (L'"')) {
+            switch (this->current.mode) {
+                case token::type::code:
+                    if (line.starts_with (L"/*")) {
+                        line.remove_prefix (2);
+                        this->current.location.column += 2;
+                        this->current.mode = token::type::comment;
+
+                        goto next;
+                    }
+                    if (line.starts_with (L"//")) {
+                        line.remove_prefix (2);
+                        this->current.location.column += 2;
+                        this->current.mode = token::type::comment;
+                        single_line_comment = true;
+
+                        goto next;
+                    }
+                    if (line.starts_with (L'"')) {
+                        line.remove_prefix (1);
+                        this->current.location.column += 1;
+                        this->current.mode = token::type::string;
+
+                        goto next;
+                    }
+                    break;
+
+                case token::type::comment:
+                    if (line.starts_with (L"*/") && !single_line_comment) {
+                        line.remove_prefix (2);
+                        this->current.location.column += 2;
+                        this->current.mode = token::type::code;
+
+                        goto next;
+                    }
+                    break;
+
+                case token::type::string:
+                    if (line.starts_with (L'"')) {
+                        line.remove_prefix (1);
+                        this->current.location.column += 1;
+                        this->current.mode = token::type::code;
+
+                        goto next;
+                    }
+                    break;
             }
 
-            if (line.starts_with (L"/*") || line.starts_with (L"//")) {
-                // token.type = token::type::comment;
-                // 
+            if (line.starts_with (L'&')) {
+                // windows rsrc/user32 accelerator hint in strings
             }
 
             if (line.starts_with (L'\'')) {
@@ -370,6 +408,10 @@ next:
 
     this->current.location.row++;
     this->current.location.column = 0;
+
+    if (single_line_comment) {
+        this->current.mode = token::type::code;
+    }
 
     /*DWORD n;
     WriteConsole (GetStdHandle (STD_OUTPUT_HANDLE), line.data (), line.size (), &n, NULL);
