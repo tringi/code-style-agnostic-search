@@ -15,6 +15,7 @@ std::vector <std::pair <agsearch::location, agsearch::location>> results;
 
 struct search : private agsearch {
     using agsearch::load;
+    using agsearch::parameters;
 
     std::size_t find (std::wstring_view needle) {
         results.clear ();
@@ -22,8 +23,30 @@ struct search : private agsearch {
 
         // TODO: invalidate hWnd
         // TODO: report 'n' found
+        // TODO: compute time it took
 
         return n;
+    }
+
+    void VizualizePattern (HDC hDC, RECT r) {
+        r.top += 7;
+
+        SIZE character;
+        GetTextExtentPoint32 (hDC, L"W", 1, &character);
+
+        for (auto & [ location, token] : this->pattern) {
+            switch (token.type) {
+                case token::type::code: SetTextColor (hDC, 0x000000); break;
+                case token::type::string: SetTextColor (hDC, 0x663399); break;
+                case token::type::comment: SetTextColor (hDC, 0x339933); break;
+                case token::type::identifier: SetTextColor (hDC, 0xCC6633); break;
+            }
+            
+            TextOut (hDC,
+                     r.left + character.cx * location.column,
+                     r.top + (character.cy - 2) * location.row,
+                     token.value.c_str (), token.value.length ());
+        }
     }
 
 private:
@@ -43,7 +66,6 @@ private:
 
 extern "C" IMAGE_DOS_HEADER __ImageBase;
 HFONT hCodeFont = NULL;
-UINT fontHeight = 1;
 UINT charWidth = 1;
 UINT nParameters = 0;
 wchar_t tmpstrbuffer [65536];
@@ -151,28 +173,30 @@ void Paint (HDC hDC, RECT rc) {
     SIZE character;
     GetTextExtentPoint32 (hDC, L"W", 1, &character);
 
+    auto height = character.cy - 2;
+
     for (auto result : results) {
         auto points = 4u;
         POINT sp [2] = {
-            { character.cx * result.first.column, fontHeight * result.first.row },
-            { character.cx * result.second.column, fontHeight * result.second.row },
+            { character.cx * result.first.column, height * result.first.row },
+            { character.cx * result.second.column, height * result.second.row },
         };
             
         POINT polygon [9];
         if (result.first.row == result.second.row) {
             polygon [0].x = sp [0].x; polygon [0].y = sp [0].y;
             polygon [1].x = sp [1].x; polygon [1].y = sp [0].y;
-            polygon [2].x = sp [1].x; polygon [2].y = sp [0].y + fontHeight;
-            polygon [3].x = sp [0].x; polygon [3].y = sp [0].y + fontHeight;
+            polygon [2].x = sp [1].x; polygon [2].y = sp [0].y + height;
+            polygon [3].x = sp [0].x; polygon [3].y = sp [0].y + height;
         } else {
             polygon [0].x = sp [0].x; polygon [0].y = sp [0].y;
             polygon [1].x = rc.right; polygon [1].y = sp [0].y;
             polygon [2].x = rc.right; polygon [2].y = sp [1].y;
             polygon [3].x = sp [1].x; polygon [3].y = sp [1].y;
-            polygon [4].x = sp [1].x; polygon [4].y = sp [1].y + fontHeight;
-            polygon [5].x = 0;        polygon [5].y = sp [1].y + fontHeight;
-            polygon [6].x = 0;        polygon [6].y = sp [0].y + fontHeight;
-            polygon [7].x = sp [0].x; polygon [7].y = sp [0].y + fontHeight;
+            polygon [4].x = sp [1].x; polygon [4].y = sp [1].y + height;
+            polygon [5].x = 0;        polygon [5].y = sp [1].y + height;
+            polygon [6].x = 0;        polygon [6].y = sp [0].y + height;
+            polygon [7].x = sp [0].x; polygon [7].y = sp [0].y + height;
             points = 8u;
         };
 
@@ -184,11 +208,15 @@ void Paint (HDC hDC, RECT rc) {
         Polygon (hDC, polygon, points);
     }
 
+    SetTextColor (hDC, 0x000000);
     for (auto i = 0; i != file.size (); ++i) {
-        TextOut (hDC, rc.right / 4, 7 + fontHeight * i, file [i].c_str (), file [i].length ());
-        if (7 + fontHeight * i > rc.bottom)
+        TextOut (hDC, rc.right / 4, 7 + height * i, file [i].c_str (), file [i].length ());
+        if (7 + height * i > rc.bottom)
             break;
     }
+
+    rc.left += 3 * rc.right / 4;
+    search.VizualizePattern (hDC, rc);
 }
 
 const wchar_t * LoadTmpString (UINT id) {
@@ -239,11 +267,6 @@ HFONT SetFonts (HWND hWnd) {
 
         if (auto h = CreateFontIndirect (&metrics.lfMenuFont)) {
             hCodeFont = h;
-            if (metrics.lfMenuFont.lfHeight < 0) {
-                fontHeight = -metrics.lfMenuFont.lfHeight;
-            } else {
-                fontHeight = metrics.lfMenuFont.lfHeight;
-            }
         }
     }
 
@@ -269,13 +292,16 @@ LRESULT CALLBACK Procedure (HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 
                 CreateWindowEx (0, L"STATIC", LoadTmpString (3), WS_VISIBLE | WS_CHILD | SS_LEFT, 0, 0, 0, 0, hWnd, (HMENU) 1000, cs->hInstance, NULL);
                 
+                auto pptr = reinterpret_cast <bool *> (&search.parameters);
                 while (true) {
                     auto s = LoadTmpString (1001 + nParameters);
                     if (*s) {
                         if (auto h = CreateWindow (L"BUTTON", s,
                                                    WS_VISIBLE | WS_CHILD | WS_TABSTOP | BS_AUTOCHECKBOX,
                                                    0, 0, 0, 0, hWnd, (HMENU) (1001 + nParameters), cs->hInstance, NULL)) {
-                            SendMessage (h, BM_SETCHECK, BST_CHECKED, 0);
+                            if (*pptr++) {
+                                SendMessage (h, BM_SETCHECK, BST_CHECKED, 0);
+                            }
                             ++nParameters;
                         }
                     } else
@@ -302,7 +328,7 @@ LRESULT CALLBACK Procedure (HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
                     if (GetClientRect (hWnd, &client)) {
                         if (HDWP hDwp = BeginDeferWindowPos (2)) {
 
-                            long Y = client.bottom - (120 + 20 * nParameters);
+                            long Y = client.bottom - (120 + 18 * nParameters);
                             if (Y > 230) {
                                 Y = 230;
                             }
@@ -313,7 +339,7 @@ LRESULT CALLBACK Procedure (HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
                             DeferChildPos (hDwp, hWnd, 1000, { 7, Y + 97 }, { client.right / 4 - 14, 20 });
 
                             for (auto i = 0; i != nParameters; ++i) {
-                                DeferChildPos (hDwp, hWnd, 1001 + i, { 7, Y + 117 + 20 * i }, { client.right / 4 - 14, 20 });
+                                DeferChildPos (hDwp, hWnd, 1001 + i, { 7, Y + 117 + 18 * i }, { client.right / 4 - 14, 18 });
                             }
 
                             EndDeferWindowPos (hDwp);
@@ -370,11 +396,11 @@ LRESULT CALLBACK Procedure (HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
                 default:
                     if (LOWORD (wParam) >= 1001 && LOWORD (wParam) < 1001 + nParameters) {
                         if (HIWORD (wParam) == BN_CLICKED) {
-
-                            // TODO: update parameters
+                            reinterpret_cast <bool *> (&search.parameters) [LOWORD (wParam) - 1001] = (SendMessage ((HWND) lParam, BM_GETCHECK, 0, 0) == BST_CHECKED);
                             
-                            
+                            search.load (file); // currently need to reload the file, most transformations are done at that time
                             search.find (GetCtrlText (GetDlgItem (hWnd, 901)));
+
                             InvalidateRect (hWnd, NULL, FALSE);
                         }
                     }
@@ -434,6 +460,8 @@ LPCTSTR Initialize (HINSTANCE hInstance) {
 
 int CALLBACK wWinMain (_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow) {
     InitCommonControls ();
+
+        AllocConsole ();
 
     if (auto atom = Initialize (hInstance)) {
         auto menu = LoadMenu (hInstance, MAKEINTRESOURCE (1));
