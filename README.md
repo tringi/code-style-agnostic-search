@@ -1,11 +1,21 @@
 # Code style -agnostic search for C++
 
-TBD
+Relatively simple 
+with various features:
+
+## Features
+
+* Ignores insignificant whitespace; including line endings.
+
+* Individual partial words matching, on top of classic whole word matching on/off modes.  
+  `stat nlin boo` == `static inline bool`
+
+* Linguistic folding, diacritics and case insensitivity of tokens implemented through Windows API
+
+
 
 ## TODO
 
-* ignore insignificant whitespace
-   * including line endings
 * match different forms of escapes, e.g.: `\n == \013`
 * match escaped characters to actual characters
 * match different number forms when value matches, `1 == 0x01`
