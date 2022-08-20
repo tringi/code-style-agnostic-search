@@ -139,8 +139,8 @@ private:
     std::wstring fold (std::wstring_view);
 
     void append_token (wchar_t c);
-    void append_token (std::wstring_view value, std::uint32_t advance);
-    void append_identifier (std::wstring_view value, std::uint32_t advance);
+    void append_token (std::wstring_view value, std::size_t advance);
+    void append_identifier (std::wstring_view value, std::size_t advance);
 };
 
 

@@ -133,29 +133,29 @@ bool agsearch::compare_tokens (const token & a, const token & b, std::uint32_t *
 
         if (this->parameters.whole_words) {
             return CompareStringEx (LOCALE_NAME_INVARIANT, flags,
-                                    a.value.data (), a.value.size (),
-                                    b.value.data (), b.value.size (),
+                                    a.value.data (), (int) a.value.size (),
+                                    b.value.data (), (int) b.value.size (),
                                     NULL, NULL, 0)
                 == CSTR_EQUAL;
         } else
         if (this->parameters.individual_partial_words) {
             return FindNLSStringEx (LOCALE_NAME_INVARIANT, flags,
-                                    a.value.data (), a.value.size (),
-                                    b.value.data (), b.value.size (),
+                                    a.value.data (), (int) a.value.size (),
+                                    b.value.data (), (int) b.value.size (),
                                     NULL, NULL, NULL, 0) != -1;
         } else {
             if (first || last) {
                 auto length = 0;
                 auto offset = FindNLSStringEx (LOCALE_NAME_INVARIANT, flags,
-                                               a.value.data (), a.value.size (),
-                                               b.value.data (), b.value.size (),
+                                               a.value.data (), (int) a.value.size (),
+                                               b.value.data (), (int) b.value.size (),
                                                &length, NULL, NULL, 0);
                 if (offset != -1) {
                     if (first) {
-                        *first = offset;
+                        *first = (std::uint32_t) offset;
                     }
                     if (last) {
-                        *last = a.value.size () - length - offset;
+                        *last = (std::uint32_t) (a.value.size () - length - offset);
                     }
                     return true;
                 } else
@@ -163,8 +163,8 @@ bool agsearch::compare_tokens (const token & a, const token & b, std::uint32_t *
 
             } else {
                 return CompareStringEx (LOCALE_NAME_INVARIANT, flags,
-                                        a.value.data (), a.value.size (),
-                                        b.value.data (), b.value.size (),
+                                        a.value.data (), (int) a.value.size (),
+                                        b.value.data (), (int) b.value.size (),
                                         NULL, NULL, 0)
                     == CSTR_EQUAL;
             }
@@ -370,6 +370,10 @@ next:
 
     this->current.location.row++;
     this->current.location.column = 0;
+
+    /*DWORD n;
+    WriteConsole (GetStdHandle (STD_OUTPUT_HANDLE), line.data (), line.size (), &n, NULL);
+    WriteConsole (GetStdHandle (STD_OUTPUT_HANDLE), L"\r\n", 2, &n, NULL);*/
 }
 
 std::wstring agsearch::fold (std::wstring_view value) {
@@ -383,10 +387,10 @@ std::wstring agsearch::fold (std::wstring_view value) {
     }
     if (fold) {
         auto flags = MAP_COMPOSITE | MAP_EXPAND_LIGATURES | MAP_FOLDCZONE | MAP_FOLDDIGITS;
-        if (auto n = FoldStringW (flags, value.data (), value.size (), NULL, 0)) {
+        if (auto n = FoldStringW (flags, value.data (), (int) value.size (), NULL, 0)) {
             std::wstring folded;
             folded.resize (n);
-            n = FoldStringW (flags, value.data (), value.size (), folded.data (), folded.size ());
+            n = FoldStringW (flags, value.data (), (int) value.size (), folded.data (), (int) folded.size ());
             folded.resize (n);
 
             return folded;
@@ -395,7 +399,7 @@ std::wstring agsearch::fold (std::wstring_view value) {
     return std::wstring (value);
 }
 
-void agsearch::append_token (std::wstring_view value, std::uint32_t advance) {
+void agsearch::append_token (std::wstring_view value, std::size_t advance) {
     token t;
     t.type = this->current.mode;
     t.value = value;
@@ -405,7 +409,7 @@ void agsearch::append_token (std::wstring_view value, std::uint32_t advance) {
     this->current.location.column += advance;
 }
 
-void agsearch::append_identifier (std::wstring_view value, std::uint32_t advance) {
+void agsearch::append_identifier (std::wstring_view value, std::size_t advance) {
     token t;
     if (this->current.mode == token::type::code) {
         t.type = token::type::identifier;

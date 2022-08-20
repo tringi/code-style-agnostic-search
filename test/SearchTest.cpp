@@ -45,7 +45,7 @@ struct search : private agsearch {
             TextOut (hDC,
                      r.left + character.cx * location.column,
                      r.top + (character.cy - 2) * location.row,
-                     token.value.c_str (), token.value.length ());
+                     token.value.c_str (), (int) token.value.length ());
         }
     }
 
@@ -178,8 +178,8 @@ void Paint (HDC hDC, RECT rc) {
     for (auto result : results) {
         auto points = 4u;
         POINT sp [2] = {
-            { character.cx * result.first.column, height * result.first.row },
-            { character.cx * result.second.column, height * result.second.row },
+            { character.cx * (LONG) result.first.column, height * (LONG) result.first.row },
+            { character.cx * (LONG) result.second.column, height * (LONG) result.second.row },
         };
             
         POINT polygon [9];
