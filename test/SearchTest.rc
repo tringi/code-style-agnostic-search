@@ -25,7 +25,7 @@ LANGUAGE LANG_ENGLISH, SUBLANG_DEFAULT
 STRINGTABLE
 LANGUAGE LANG_ENGLISH, SUBLANG_DEFAULT
 {
-    1   "C++ Coding Style Agnostic Search Example"
+    1   "C++ Coding Style Agnostic (and more) Search Example"
     2   "&Search:"
     3   "&Parameters:"
 
@@ -51,9 +51,14 @@ LANGUAGE LANG_ENGLISH, SUBLANG_DEFAULT
     1011 "Match digraphs and corresponding tokens"
     1012 "Match trigraphs and corresponding tokens"
     1013 "Match ISO646 tokens and corresponding operators"
-    1014 "Ignore all syntactic tokens"
-    1015 "Ignore trailing semicolons"
-    1016 "Ignore trailing commas"
-    1017 "Ignore all semicolons"
-    1018 "Ignore all commas"
+    1014 "Unescape (TODO)"
+    1015 "Ignore all syntactic tokens"
+    1016 "Ignore trailing semicolons"
+    1017 "Ignore trailing commas"
+    1018 "Ignore all semicolons"
+    1019 "Ignore all commas"
+    1020 "Match different numeric notations"
+    1021 "Match NULL/nullptr and 0"
+
+    // 10XX "Ignore &'s (keyboard accelerator hints) in strings"
 }

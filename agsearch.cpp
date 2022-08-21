@@ -9,9 +9,6 @@ void agsearch::clear () {
     this->current.location.row = 0;
     this->current.location.column = 0;
 }
-void agsearch::append_text (std::wstring_view text) {
-    this->process_text (text);
-}
 
 void agsearch::replace (std::uint32_t row, std::wstring_view line) {
     this->pattern.erase (this->pattern.lower_bound ({ row + 0, 0 }),
@@ -23,7 +20,7 @@ void agsearch::replace (std::uint32_t row, std::wstring_view line) {
 
 namespace {
     template <typename IT>
-    bool is_last (IT it, IT e) {
+    inline bool is_preceeding_iterator (IT it, IT e) {
         ++it;
         return it == e;
     }
@@ -77,7 +74,7 @@ std::size_t agsearch::find (std::wstring_view needle_text) {
                 // compare tokens properly
                 if (!this->compare_tokens (i->second, s->second,
                                            (s == is) ? &fx : nullptr,
-                                           is_last (s, es) ? &lx : nullptr))
+                                           is_preceeding_iterator (s, es) ? &lx : nullptr))
                     break;
             }
             ++ih;
@@ -87,6 +84,13 @@ std::size_t agsearch::find (std::wstring_view needle_text) {
 }
 
 bool agsearch::compare_tokens (const token & a, const token & b, std::uint32_t * first, std::uint32_t * last) {
+
+    if (parameters.numbers) {
+        if ((a.type == token::type::numeric) && (b.type == token::type::numeric)) {
+            if ((a.integer == b.integer) && (a.decimal == b.decimal))
+                return true;
+        }
+    }
 
     if ((a.type == token::type::code) || (b.type == token::type::code)) {
         if ((a.type == token::type::code) && (b.type == token::type::code)) {
@@ -142,7 +146,8 @@ bool agsearch::compare_tokens (const token & a, const token & b, std::uint32_t *
             return FindNLSStringEx (LOCALE_NAME_INVARIANT, flags,
                                     a.value.data (), (int) a.value.size (),
                                     b.value.data (), (int) b.value.size (),
-                                    NULL, NULL, NULL, 0) != -1;
+                                    NULL, NULL, NULL, 0)
+                != -1;
         } else {
             if (first || last) {
                 auto length = 0;
@@ -217,6 +222,11 @@ void agsearch::process_line (std::wstring_view line) {
         { L"not", L"!" },  { L"not_eq", L"!=" },
     };
     
+    // un-escape and similar transformations
+    //  - 'unescaped' stores copy of 'line' in case it needs to be modified
+
+    std::wstring unescaped;
+
     // trim the end
     //  - makes some options below easier
 
@@ -224,7 +234,6 @@ void agsearch::process_line (std::wstring_view line) {
 
     // process
 
-    bool single_line_comment = false;
     while (!line.empty ()) {
 next:
         // skip whitespace
@@ -266,9 +275,13 @@ next:
                     }
                 }
             }
-
-            // OPTION: keywords into tokens?
-            // OPTION: nullptr => 0
+            if (parameters.nullptr_is_0) {
+                if (identifier == L"nullptr" || identifier == L"NULL") {
+                    line.remove_prefix (length);
+                    this->append_numeric (identifier, 0, 0, length);
+                    goto next;
+                }
+            }
 
             this->append_identifier (identifier, length);
             line.remove_prefix (length);
@@ -290,7 +303,12 @@ next:
                         line.remove_prefix (2);
                         this->current.location.column += 2;
                         this->current.mode = token::type::comment;
-                        single_line_comment = true;
+
+                        if (line.ends_with (L'\\')) {
+                            this->single_line_comment = 2;
+                        } else {
+                            this->single_line_comment = 1;
+                        }
 
                         goto next;
                     }
@@ -304,7 +322,7 @@ next:
                     break;
 
                 case token::type::comment:
-                    if (line.starts_with (L"*/") && !single_line_comment) {
+                    if (line.starts_with (L"*/") && !this->single_line_comment) {
                         line.remove_prefix (2);
                         this->current.location.column += 2;
                         this->current.mode = token::type::code;
@@ -314,6 +332,12 @@ next:
                     break;
 
                 case token::type::string:
+                    if (line.starts_with (L"\\\"")) {
+                        line.remove_prefix (2);
+                        this->append_token (L"\"", 2);
+
+                        goto next;
+                    }
                     if (line.starts_with (L'"')) {
                         line.remove_prefix (1);
                         this->current.location.column += 1;
@@ -322,14 +346,6 @@ next:
                         goto next;
                     }
                     break;
-            }
-
-            if (line.starts_with (L'&')) {
-                // windows rsrc/user32 accelerator hint in strings
-            }
-
-            if (line.starts_with (L'\'')) {
-                // character, store as number or string, depending on settings
             }
 
             for (auto & mct : multi_character_tokens) {
@@ -409,8 +425,11 @@ next:
     this->current.location.row++;
     this->current.location.column = 0;
 
-    if (single_line_comment) {
-        this->current.mode = token::type::code;
+    if (this->single_line_comment) {
+        --this->single_line_comment;
+        if (this->single_line_comment == 0) {
+            this->current.mode = token::type::code;
+        }
     }
 
     /*DWORD n;
@@ -460,6 +479,22 @@ void agsearch::append_identifier (std::wstring_view value, std::size_t advance) 
     }
     t.value = this->fold (value);
     t.length = advance;
+
+    this->pattern.insert ({ this->current.location, t });
+    this->current.location.column += advance;
+}
+
+void agsearch::append_numeric (std::wstring_view value, std::uint64_t i, std::uint64_t d, std::size_t advance) {
+    token t;
+    if (this->current.mode == token::type::code) {
+        t.type = token::type::numeric;
+    } else {
+        t.type = this->current.mode;
+    }
+    t.value = this->fold (value);
+    t.length = advance;
+    t.integer = i;
+    t.decimal = d;
 
     this->pattern.insert ({ this->current.location, t });
     this->current.location.column += advance;

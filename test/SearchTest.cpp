@@ -4,6 +4,7 @@
 #include <CommDlg.h>
 #include <ShellAPI.h>
 
+#include <cwchar>
 #include <cstddef>
 
 // using 'agsearch'
@@ -18,16 +19,16 @@ struct search : private agsearch {
     using agsearch::parameters;
 
     std::size_t find (std::wstring_view needle) {
-        results.clear ();
-        auto n = this->agsearch::find (needle);
-
-        // TODO: invalidate hWnd
-        // TODO: report 'n' found
-        // TODO: compute time it took
-
-        return n;
+        ::results.clear ();
+        return this->agsearch::find (needle);
     }
 
+    virtual bool found (std::wstring_view needle, std::size_t index, location begin, location end) override {
+        ::results.push_back ({ begin, end });
+        return true;
+    }
+
+public:
     void VizualizePattern (HDC hDC, RECT r) {
         r.top += 7;
 
@@ -37,9 +38,10 @@ struct search : private agsearch {
         for (auto & [ location, token] : this->pattern) {
             switch (token.type) {
                 case token::type::code: SetTextColor (hDC, 0x000000); break;
-                case token::type::string: SetTextColor (hDC, 0x663399); break;
+                case token::type::string: SetTextColor (hDC, 0x2233CC); break;
                 case token::type::comment: SetTextColor (hDC, 0x339933); break;
                 case token::type::identifier: SetTextColor (hDC, 0xCC6633); break;
+                case token::type::numeric: SetTextColor (hDC, 0x990099); break;
             }
             
             TextOut (hDC,
@@ -49,10 +51,26 @@ struct search : private agsearch {
         }
     }
 
-private:
-    virtual bool found (std::wstring_view needle, std::size_t index, location begin, location end) override {
-        results.push_back ({ begin, end });
-        return true;
+    LARGE_INTEGER perfhz;
+    LARGE_INTEGER perfT0;
+
+    void start () {
+        QueryPerformanceFrequency (&this->perfhz);
+        QueryPerformanceCounter (&this->perfT0);
+    }
+    void report (HWND hWnd, bool full) const {
+        LARGE_INTEGER perfT1;
+        QueryPerformanceCounter (&perfT1);
+
+        auto t = 1000.0 * double (perfT1.QuadPart - this->perfT0.QuadPart) / double (this->perfhz.QuadPart);
+
+        wchar_t report [256];
+        std::swprintf (report, 256, L"%u results in %.2f ms (%s)",
+                       (unsigned) results.size (), t,
+                       full ? L"FULL RESCAN AND SEARCH" : L"search only");
+
+        SetDlgItemText (hWnd, 902, report);
+        InvalidateRect (hWnd, NULL, FALSE);
     }
 } search;
 
@@ -387,8 +405,9 @@ LRESULT CALLBACK Procedure (HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
                 case 901:
                     switch (HIWORD (wParam)) {
                         case EN_CHANGE:
+                            search.start ();
                             search.find (GetCtrlText ((HWND) lParam));
-                            InvalidateRect (hWnd, NULL, FALSE);
+                            search.report (hWnd, false);
                             break;
                     }
                     break;
@@ -398,10 +417,10 @@ LRESULT CALLBACK Procedure (HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
                         if (HIWORD (wParam) == BN_CLICKED) {
                             reinterpret_cast <bool *> (&search.parameters) [LOWORD (wParam) - 1001] = (SendMessage ((HWND) lParam, BM_GETCHECK, 0, 0) == BST_CHECKED);
                             
+                            search.start ();
                             search.load (file); // currently need to reload the file, most transformations are done at that time
                             search.find (GetCtrlText (GetDlgItem (hWnd, 901)));
-
-                            InvalidateRect (hWnd, NULL, FALSE);
+                            search.report (hWnd, true);
                         }
                     }
             }
