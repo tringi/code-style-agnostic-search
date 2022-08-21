@@ -1,18 +1,64 @@
-# Code style -agnostic search for C++
+# Coding Style -agnostic (and more) search for C++
 
 Relatively simple 
 with various features:
 
 ## Features
 
-* Ignores insignificant whitespace; including line endings.
-
-* Individual partial words matching, on top of classic whole word matching on/off modes.  
+* Ignores insignificant whitespace; including line endings
+* Individual partial words matching, on top of classic whole word matching on/off modes  
   `stat nlin boo` == `static inline bool`
+* Linguistic folding, diacritics and case insensitivity of tokens implemented through Windows API NLS
 
-* Linguistic folding, diacritics and case insensitivity of tokens implemented through Windows API
 
+* Options to ignore all syntactic tokens, and commas or semicolons, either all or trailing only
+* Matching digraphs, trigraphs and ISO646 alternative tokens to primary tokens they represent
 
+## Usage
+*[SearchTest.cpp](https://github.com/tringi/code-style-agnostic-search/blob/main/test/SearchTest.cpp)*
+
+    #include "agsearch.h"
+    
+    struct search : public agsearch {
+        std::vector <std::pair <location, location>> results;
+    
+        std::size_t find (std::wstring_view needle) {
+            this->results.clear ();
+            return this->agsearch::find (needle);
+        }
+    
+    private:
+        bool found (std::wstring_view needle, std::size_t i, location begin, location end) override {
+            this->results.push_back ({ begin, end });
+            return true;
+        }
+    } search;
+    
+    int main () {
+    
+        // ...
+    
+        search.parameters.whole_words = true; // configure the engine
+    
+        search.load (text);         // 'text' is container of std::wstring_view
+        search.append (line);       // 'line' is single line of code std::wstring_view
+        search.replace (row, line); // 'row' is row index to replace
+    
+        // ...
+    
+        search.find (needle); // 'needle' is code to be searched for
+        search.results;       // contains pair of 'location' for every found instance
+    
+        // ...
+    
+    
+        // ...
+    }
+
+**Notes:**
+
+* whole **text** must be reloaded when any of the **parameters** change
+* `agsearch::location` contains `row` and `column` members, and both are 0-based
 
 ## TODO
 
