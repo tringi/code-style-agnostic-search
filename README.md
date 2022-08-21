@@ -38,7 +38,7 @@ with various features:
     
         // ...
     
-        search.parameters.whole_words = true; // configure the engine
+        search.parameters.whole_words = false; // configure the engine
     
         search.load (text);         // 'text' is container of std::wstring_view
         search.append (line);       // 'line' is single line of code std::wstring_view
@@ -50,15 +50,13 @@ with various features:
         search.results;       // contains pair of 'location' for every found instance
     
         // ...
-    
-    
-        // ...
     }
 
 **Notes:**
 
-* whole **text** must be reloaded when any of the **parameters** change
+* whole **text** must be reloaded when any of the `agsearch::parameters` change
 * `agsearch::location` contains `row` and `column` members, and both are 0-based
+* return false from `found` virtual callback to stop search
 
 ## TODO
 
@@ -73,6 +71,5 @@ with various features:
 * match different order of declaration qualifiers, e.g.: `"static inline" == "inline static"`
 * match reinterpret_cast/static_cast to C-style cast
 * match curly braces and lack of them where appropriate, e.g. single statement after `if`
-* ignore unnecessary semicolons, trailing commas
 * ignore accelerator prefixes (&) in strings (resource)
-* all features optional
+
