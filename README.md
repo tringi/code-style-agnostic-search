@@ -9,8 +9,10 @@ with various features:
 * Individual partial words matching, on top of classic whole word matching on/off modes  
   `stat nlin boo` == `static inline bool`
 * Linguistic folding, diacritics and case insensitivity of tokens implemented through Windows API NLS
+* Matching different numeric notations
+  `0x007B`, `0173`, `0b0'0111'1011` all match `123`
 
-
+* Option to ignore keyboard accelerator hints (&, Win32 GUI feature) in strings
 * Options to ignore all syntactic tokens, and commas or semicolons, either all or trailing only
 * Matching digraphs, trigraphs and ISO646 alternative tokens to primary tokens they represent
 
@@ -62,14 +64,11 @@ with various features:
 
 * match different forms of escapes, e.g.: `\n == \013`
 * match escaped characters to actual characters
-* match different number forms when value matches, `1 == 0x01`
-* match different number types (optionally) "1.0f" match "1.0" or "7u" match "7LL"
-   * optionally match even "123.0f" == "0x007BuLL"
+* add option whether to match integers and floats, i.e. "123.0f" == "0x007BuLL"
 * match different notations for the same type `"unsigned int" == "int unsigned"`
    * `== "std::uint32_t"` (configurable plaftorm assumptions)
    * ignore redundant
 * match different order of declaration qualifiers, e.g.: `"static inline" == "inline static"`
 * match reinterpret_cast/static_cast to C-style cast
 * match curly braces and lack of them where appropriate, e.g. single statement after `if`
-* ignore accelerator prefixes (&) in strings (resource)
-
+* combine string literals
