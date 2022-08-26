@@ -1,20 +1,20 @@
 # Coding Style -agnostic (and more) search for C++
 
-Relatively simple 
-with various features:
-
-## Features
-
 * Ignores insignificant whitespace; including line endings
 * Individual partial words matching, on top of classic whole word matching on/off modes  
   `stat nlin boo` == `static inline bool`
 * Linguistic folding, diacritics and case insensitivity of tokens implemented through Windows API NLS
-* Matching different numeric notations
+* Matching different numeric notations  
   `0x007B`, `0173`, `0b0'0111'1011` all match `123`
 
 * Option to ignore keyboard accelerator hints (&, Win32 GUI feature) in strings
 * Options to ignore all syntactic tokens, and commas or semicolons, either all or trailing only
 * Matching digraphs, trigraphs and ISO646 alternative tokens to primary tokens they represent
+
+## Example program
+
+* [SearchTest.exe](https://github.com/tringi/code-style-agnostic-search/blob/main/test/SearchTest.exe?raw=true) (x64)  
+  Start the program, load any short C++ file, and try searching.
 
 ## Usage
 *[SearchTest.cpp](https://github.com/tringi/code-style-agnostic-search/blob/main/test/SearchTest.cpp)*
