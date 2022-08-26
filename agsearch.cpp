@@ -2,6 +2,45 @@
 #include "agsearch.h"
 #include <algorithm>
 #include <cwctype>
+#include <cmath>
+
+namespace {
+    static constexpr std::wstring_view whitespace = L" \f\n\r\t\v\x1680\x180E\x2002\x2003\x2004\x2005\x2006\x2007\x2008\x2009\x200A\x200B\x202F\x205F\x2060\x3000\xFEFF\xFFFD\0";
+    static constexpr std::wstring_view multi_character_tokens [] = {
+        L"::", L"...", L"->*", L"->", L".*",
+        L"==", L"!=", L"<=", L">=", L"<=>",
+        L"++", L"--", L"<<", L">>",
+        L"+=", L"-=", L"*=", L"/=", L"%=", L"&=", L"|=", L"^=", L"<<=", L">>=",
+        L"&&", L"||", 
+    };
+    static constexpr std::pair <std::wstring_view, wchar_t> alternative_tokens [] = {
+        { L"<%", L'{' }, { L"%>", L'}' },
+        { L"<:", L'[' }, { L":>", L']' },
+        { L"%:", L'#' },
+    };
+    static constexpr std::pair <std::wstring_view, wchar_t> trigraph_tokens [] = {
+        { L"??<", L'{' }, { L"??>", L'}' },
+        { L"??(", L'[' }, { L"??)", L']' },
+        { L"??=", L'#' },
+        { L"??/", L'\\' },
+        { L"??'", L'^' },
+        { L"??!", L'|' },
+        { L"??-", L'~' },
+    };
+    static constexpr std::pair <std::wstring_view, std::wstring_view> iso646_tokens [] = {
+        { L"and", L"&&" }, { L"and_eq", L"&=" }, { L"bitand", L"&" },
+        { L"or",  L"||" }, { L"or_eq",  L"|=" }, { L"bitor", L"|" },
+        { L"xor", L"^" },  { L"xor_eq", L"^=" }, { L"compl", L"~" },
+        { L"not", L"!" },  { L"not_eq", L"!=" },
+    };
+    static const std::map <wchar_t, wchar_t> single_letter_escape_sequences = {
+        { 'a', '\a' }, { 'b', '\b' },
+        { 'f', '\f' },
+        { 'r', '\r' }, { 'n', '\n' },
+        { 't', '\t' }, { 'v', '\v' },
+    };
+
+}
 
 void agsearch::clear () {
     this->pattern.clear ();
@@ -20,6 +59,11 @@ void agsearch::replace (std::uint32_t row, std::wstring_view line) {
 
 namespace {
     template <typename IT>
+    inline IT get_preceeding_iterator (IT it) {
+        --it;
+        return it;
+    }
+    template <typename IT>
     inline bool is_preceeding_iterator (IT it, IT e) {
         ++it;
         return it == e;
@@ -33,6 +77,7 @@ std::size_t agsearch::find (std::wstring_view needle_text) {
     agsearch needle;
     needle.parameters = this->parameters;
     needle.process_text (needle_text);
+    needle.normalize ();
 
     // no cleverness about empty sets
 
@@ -55,9 +100,7 @@ std::size_t agsearch::find (std::wstring_view needle_text) {
             for (auto s = is; ; ++i, ++s) {
                 if (s == es) {
 
-                    auto e = i;
-                    --e;
-                    
+                    auto e = get_preceeding_iterator (i);
                     if (this->found (needle_text, n++,
                                      { ih->first.row, ih->first.column + fx },
                                      { e->first.row, e->first.column + e->second.length - lx})) {
@@ -110,6 +153,11 @@ bool agsearch::compare_tokens (const token & a, const token & b, std::uint32_t *
 
         DWORD flags = 0;
 
+        if ((a.type == token::type::numeric) || (b.type == token::type::numeric)) {
+            if (this->parameters.case_insensitive_numbers) {
+                flags |= LINGUISTIC_IGNORECASE;// | NORM_IGNORECASE | NORM_LINGUISTIC_CASING | NORM_IGNOREWIDTH | NORM_IGNOREKANATYPE;
+            }
+        }
         if ((a.type == token::type::string) || (b.type == token::type::string)) {
             if (this->parameters.case_insensitive_strings) {
                 flags |= LINGUISTIC_IGNORECASE;
@@ -192,40 +240,329 @@ namespace {
     }
 }
 
+bool agsearch::is_identifier_initial (wchar_t c) {
+    return std::iswalpha (c) // TODO: Unicode
+        || c == L'_'
+        ;
+}
+bool agsearch::is_identifier_continuation (wchar_t c) {
+    switch (this->current.mode) {
+        case token::type::string:
+            if (parameters.ignore_accelerator_hints_in_strings) {
+                if (c == L'&')
+                    return true;
+            }
+            break;
+    }
+    return std::iswalnum (c) // TODO: Unicode
+        || c == L'_'
+        ;
+}
+bool agsearch::is_numeric_initial (std::wstring_view line) {
+    return std::iswdigit (line [0])
+        || ((line.length () > 1)
+            && (line [0] == L'.')
+            && std::iswdigit (line [1]));
+}
+std::size_t agsearch::parse_integer_part (std::wstring_view line, integer_parse_state & state) {
+    std::size_t i = 0;
+
+    if ((line.length () > 1) && (line [0] == L'0')) {
+        switch (line [1]) {
+            case L'x': case L'X': state.radix = 16; i = 2; break;
+            case L'b': case L'B': state.radix = 2;  i = 2; break;
+            default:              state.radix = 8;  i = 1; break;
+        }
+    }
+
+    for (; i != line.length (); ++i) {
+        switch (state.radix) {
+            case 16:
+                switch (line [i]) {
+                    case L'0': case L'1': case L'2': case L'3': case L'4': case L'5': case L'6': case L'7': case L'8': case L'9':
+                        state.integer *= 16;
+                        state.integer += line [i] - L'0';
+                        break;
+                    case L'a': case L'b': case L'c': case L'd': case L'e': case L'f':
+                        state.integer *= 16;
+                        state.integer += 10 + (line [i] - L'a');
+                        break;
+                    case L'A': case L'B': case L'C': case L'D': case L'E': case L'F':
+                        state.integer *= 16;
+                        state.integer += 10 + (line [i] - L'A');
+                        break;
+
+                    case L'.': case L'p': case L'P':
+                        state.real = true;
+                        return i;
+
+                    case L'\'':
+                        break;
+                    default:
+                        return i;
+                }
+                break;
+
+            case 10:
+                switch (line [i]) {
+                    case L'0': case L'1': case L'2': case L'3': case L'4': case L'5': case L'6': case L'7': case L'8': case L'9':
+                        state.integer *= 10;
+                        state.integer += line [i] - L'0';
+                        break;
+                        
+                    case L'.': case L'e': case L'E':
+                        state.real = true;
+                        return i;
+
+                    case L'\'':
+                        break;
+                    default:
+                        return i;
+                }
+                break;
+
+            case 8:
+                switch (line [i]) {
+                    case L'0': case L'1': case L'2': case L'3': case L'4': case L'5': case L'6': case L'7':
+                        state.integer *= 8;
+                        state.integer += line [i] - L'0';
+                        break;
+
+                    case L'\'':
+                        break;
+                    default:
+                        return i;
+                }
+                break;
+
+            case 2:
+                switch (line [i]) {
+                    case L'0': state.integer *= 2; break;
+                    case L'1': state.integer *= 2; ++state.integer; break;
+
+                    case L'\'':
+                        break;
+                    default:
+                        return i;
+                }
+                break;
+        }
+    }
+    return i;
+}
+
+std::size_t agsearch::parse_decimal_part (std::wstring_view line, integer_parse_state & state) {
+    if (line [0] == L'.') {
+
+        std::size_t i = 1;
+        for (; i != line.length (); ++i) {
+
+            double multiplier = 1.0;
+            switch (state.radix) {
+                case 16:
+                    switch (line [i]) {
+                        case L'0': case L'1': case L'2': case L'3': case L'4': case L'5': case L'6': case L'7': case L'8': case L'9':
+                            multiplier /= 16.0;
+                            state.decimal += multiplier * (line [i] - L'0');
+                            break;
+                        case L'a': case L'b': case L'c': case L'd': case L'e': case L'f':
+                            multiplier /= 16.0;
+                            state.decimal += multiplier * (10 + (line [i] - L'a'));
+                            break;
+                        case L'A': case L'B': case L'C': case L'D': case L'E': case L'F':
+                            multiplier /= 16.0;
+                            state.decimal += multiplier * (10 + (line [i] - L'A'));
+                            break;
+
+                        case L'\'':
+                            break;
+                        default:
+                            return i + this->parse_decimal_exponent (line.substr (i), state);
+                    }
+                    break;
+
+                case 10:
+                    switch (line [i]) {
+                        case L'0': case L'1': case L'2': case L'3': case L'4': case L'5': case L'6': case L'7': case L'8': case L'9':
+                            multiplier /= 10.0;
+                            state.decimal += multiplier * (line [i] - L'0');
+                            break;
+
+                        case L'\'':
+                            break;
+                        default:
+                            return i + this->parse_decimal_exponent (line.substr (i), state);
+                    }
+                    break;
+
+                case 8:
+                    switch (line [i]) {
+                        case L'0': case L'1': case L'2': case L'3': case L'4': case L'5': case L'6': case L'7':
+                            multiplier /= 8.0;
+                            state.decimal += multiplier * (line [i] - L'0');
+                            break;
+
+                        case L'\'':
+                            break;
+                        default:
+                            return i + this->parse_decimal_exponent (line.substr (i), state);
+                    }
+                    break;
+            }
+        }
+        return i;
+    } else
+        return this->parse_decimal_exponent (line, state);
+}
+
+std::size_t agsearch::parse_decimal_exponent (std::wstring_view line, integer_parse_state & state) {
+    if (line.length () > 1) {
+
+        switch (line [0]) {
+            case L'p':
+            case L'P':
+            case L'e':
+            case L'E':
+
+                // parse exponent
+
+                std::size_t i = 1;
+                bool negative = false;
+
+                if (line [i] == '-') {
+                    negative = true;
+                    ++i;
+                }
+                if (i < line.length ()) {
+
+                    int exponent = 0;
+                    for (; i != line.length (); ++i) {
+
+                        switch (line [i]) {
+                            case L'0': case L'1': case L'2': case L'3': case L'4': case L'5': case L'6': case L'7': case L'8': case L'9':
+                                exponent *= 10;
+                                exponent += line [i] - L'0';
+                                break;
+
+                            case L'\'':
+                                break;
+                            default:
+                                goto apply;
+                        }
+                    }
+
+apply:
+                    if (negative) {
+                        exponent = -exponent;
+                    }
+                    state.decimal += state.integer;
+                    switch (line [0]) {
+                        case L'p':
+                        case L'P':
+                            state.decimal *= std::pow (2, exponent);
+                            break;
+
+                        case L'e':
+                        case L'E':
+                            state.decimal *= std::pow (10.0, exponent);
+                            break;
+                    }
+                    state.integer = state.decimal;
+                    state.decimal -= state.integer;
+                    return i;
+                }
+        }
+    }
+    return 0;
+}
+
+namespace {
+    template <typename C>
+    C at_or_0 (std::basic_string_view <C> & sv, std::size_t i) {
+        if (i < sv.length ()) {
+            return sv [i];
+        } else
+            return C (0);
+    }
+}
+
+std::size_t agsearch::parse_numeric_suffix (std::wstring_view line, integer_parse_state & state) {
+    if (!line.empty ()) {
+        if (state.real) {
+
+            // floating-point suffixes
+
+            switch (line [0]) {
+                case L'f':
+                case L'F':
+                case L'l':
+                case L'L':
+                    return 1;
+            }
+        } else {
+
+            // integer suffixes
+
+            switch (line [0]) {
+                case L'u':
+                case L'U':
+                    switch (at_or_0 (line, 1)) {
+                        case L'l':
+                        case L'L':
+                            switch (at_or_0 (line, 2)) {
+                                case L'l':
+                                case L'L':
+                                    return 3;
+                            }
+                            return 2;
+
+                        case L'z':
+                        case L'Z':
+                            return 2;
+                    }
+                    return 1;
+
+                case L'l':
+                case L'L':
+                    switch (at_or_0 (line, 1)) {
+                        case L'l':
+                        case L'L':
+                            switch (at_or_0 (line, 2)) {
+                                case L'u':
+                                case L'U':
+                                    return 3;
+                            }
+                            return 2;
+
+                        case L'u':
+                        case L'U':
+                            return 2;
+                    }
+                    return 1;
+
+                case L'z':
+                case L'Z':
+                    switch (at_or_0 (line, 1)) {
+                        case L'u':
+                        case L'U':
+                            return 2;
+                    }
+                    return 1;
+            }
+        }
+    }
+    return 0;
+}
+
 void agsearch::process_line (std::wstring_view line) {
-    static constexpr std::wstring_view whitespace = L" \f\n\r\t\v\x1680\x180E\x2002\x2003\x2004\x2005\x2006\x2007\x2008\x2009\x200A\x200B\x202F\x205F\x2060\x3000\xFEFF\xFFFD\0";
-    static constexpr std::wstring_view multi_character_tokens [] = {
-        L"::", L"...", L"->*", L"->", L".*",
-        L"==", L"!=", L"<=", L">=", L"<=>",
-        L"++", L"--", L"<<", L">>",
-        L"+=", L"-=", L"*=", L"/=", L"%=", L"&=", L"|=", L"^=", L"<<=", L">>=",
-        L"&&", L"||", 
-    };
-    static constexpr std::pair <std::wstring_view, wchar_t> alternative_tokens [] = {
-        { L"<%", L'{' }, { L"%>", L'}' },
-        { L"<:", L'[' }, { L":>", L']' },
-        { L"%:", L'#' },
-    };
-    static constexpr std::pair <std::wstring_view, wchar_t> trigraph_tokens [] = {
-        { L"??<", L'{' }, { L"??>", L'}' },
-        { L"??(", L'[' }, { L"??)", L']' },
-        { L"??=", L'#' },
-        { L"??/", L'\\' },
-        { L"??'", L'^' },
-        { L"??!", L'|' },
-        { L"??-", L'~' },
-    };
-    static constexpr std::pair <std::wstring_view, std::wstring_view> iso646_tokens [] = {
-        { L"and", L"&&" }, { L"and_eq", L"&=" }, { L"bitand", L"&" },
-        { L"or",  L"||" }, { L"or_eq",  L"|=" }, { L"bitor", L"|" },
-        { L"xor", L"^" },  { L"xor_eq", L"^=" }, { L"compl", L"~" },
-        { L"not", L"!" },  { L"not_eq", L"!=" },
-    };
     
     // un-escape and similar transformations
-    //  - 'unescaped' stores copy of 'line' in case it needs to be modified
+    //  - 'unescaped' is local copy of 'line' in case it needs to be modified
 
     std::wstring unescaped;
+    if (this->parameters.unescape/* || this->parameters.accelerators*/) {
+        // this->unescape_strings (line, unescaped);
+    }
 
     // trim the end
     //  - makes some options below easier
@@ -246,21 +583,27 @@ next:
                 break;
         }
 
-        if (std::iswdigit (line [0])) {
+        if (this->is_numeric_initial (line)) {
 
-            // if (line.starts_with (L"0x"
+            integer_parse_state state;
+            auto i = this->parse_integer_part (line, state);
+            if (i < line.length ()) {
+                if (state.real) {
+                    i += this->parse_decimal_part (line.substr (i), state);
+                }
+            }
+            if (i < line.length ()) {
+                i += this->parse_numeric_suffix (line.substr (i), state);
+            }
 
-            // parse number
-            line.remove_prefix (1);
-            ++this->current.location.column;
-
-
+            this->append_numeric (line.substr (0, i), state.integer, state.decimal, i);
+            line.remove_prefix (i);
 
         } else
-        if (std::iswalpha (line [0]) || line [0] == L'_') { // TODO: Unicode
+        if (this->is_identifier_initial (line [0])) {
             std::size_t length = 1u;
 
-            while ((length < line.length ()) && (std::iswalnum (line [length]) || line [length] == L'_')) { // TODO: Unicode
+            while ((length < line.length ()) && this->is_identifier_continuation (line [length])) {
                 ++length;
             }
 
@@ -279,6 +622,13 @@ next:
                 if (identifier == L"nullptr" || identifier == L"NULL") {
                     line.remove_prefix (length);
                     this->append_numeric (identifier, 0, 0, length);
+                    goto next;
+                }
+            }
+            if (parameters.boolean_is_integer) {
+                if (identifier == L"true" || identifier == L"false") {
+                    line.remove_prefix (length);
+                    this->append_numeric (identifier, (identifier == L"true") ? 1 : 0, 0, length);
                     goto next;
                 }
             }
@@ -312,11 +662,27 @@ next:
 
                         goto next;
                     }
+                    if (line.starts_with (L'\'')) {
+                        // TODO: code token, number, or string, or both?
+                    }
                     if (line.starts_with (L'"')) {
                         line.remove_prefix (1);
                         this->current.location.column += 1;
                         this->current.mode = token::type::string;
+                        
+                        // encode string prefix, e.g.: 'L' in L"string" 
 
+                        if (!this->pattern.empty ()) {
+                            auto & last = this->pattern.crbegin ()->second;
+                            if ((last.type == token::type::identifier) && (last.value.length () == 1)) {
+                                
+                                this->current.string_type = (char) last.value [0];
+
+                                // remove the token with the letter
+
+                                this->pattern.erase (get_preceeding_iterator (this->pattern.end ()));
+                            }
+                        }
                         goto next;
                     }
                     break;
@@ -342,6 +708,7 @@ next:
                         line.remove_prefix (1);
                         this->current.location.column += 1;
                         this->current.mode = token::type::code;
+                        this->current.string_type = 0;
 
                         goto next;
                     }
@@ -431,10 +798,6 @@ next:
             this->current.mode = token::type::code;
         }
     }
-
-    /*DWORD n;
-    WriteConsole (GetStdHandle (STD_OUTPUT_HANDLE), line.data (), line.size (), &n, NULL);
-    WriteConsole (GetStdHandle (STD_OUTPUT_HANDLE), L"\r\n", 2, &n, NULL);*/
 }
 
 std::wstring agsearch::fold (std::wstring_view value) {
@@ -466,6 +829,10 @@ void agsearch::append_token (std::wstring_view value, std::size_t advance) {
     t.value = value;
     t.length = advance;
 
+    if (this->current.mode == token::type::string) {
+        t.string_type = this->current.string_type;
+    }
+
     this->pattern.insert ({ this->current.location, t });
     this->current.location.column += advance;
 }
@@ -477,6 +844,10 @@ void agsearch::append_identifier (std::wstring_view value, std::size_t advance) 
     } else {
         t.type = this->current.mode;
     }
+    if (this->current.mode == token::type::string) {
+        t.string_type = this->current.string_type;
+    }
+
     t.value = this->fold (value);
     t.length = advance;
 
@@ -484,14 +855,17 @@ void agsearch::append_identifier (std::wstring_view value, std::size_t advance) 
     this->current.location.column += advance;
 }
 
-void agsearch::append_numeric (std::wstring_view value, std::uint64_t i, std::uint64_t d, std::size_t advance) {
+void agsearch::append_numeric (std::wstring_view value, std::uint64_t i, double d, std::size_t advance) {
     token t;
     if (this->current.mode == token::type::code) {
         t.type = token::type::numeric;
     } else {
         t.type = this->current.mode;
     }
-    t.value = this->fold (value);
+    if (this->current.mode == token::type::string) {
+        t.string_type = this->current.string_type;
+    }
+    t.value = value;
     t.length = advance;
     t.integer = i;
     t.decimal = d;
@@ -505,6 +879,36 @@ void agsearch::append_token (wchar_t c) {
 }
 
 void agsearch::normalize () {
+
+    // ignore accelerator hints in strings
+    //  - removes sole '&' inside strings; NOTE that string are tokenized too, so it may not always work
+
+    if (this->parameters.ignore_accelerator_hints_in_strings) {
+        for (auto & [location, token] : this->pattern) {
+            if (token.type == token::type::string) {
+
+                auto i = std::wstring::npos;
+                while ((i = token.value.find (L'&', i + 1)) != std::wstring::npos) {
+                    
+                    if ((i < token.value.length () - 1) && (token.value [i + 1] == L'&')) {
+                        token.value.erase (i, 1);
+                        ++i;
+                    } else {
+                        token.value.erase (i, 1);
+                    }
+                }
+            }
+        }
+    }
+
+    if (this->parameters.undecorate_comments) {
+        for (auto & [location, token] : this->pattern) {
+            if (token.type == token::type::comment) {
+
+            }
+        }
+    }
+
     // TODO: normalize order of tokens
     // TODO: normalize order of integer specs, remove redundand words but fix location & length
 }

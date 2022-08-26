@@ -30,6 +30,8 @@ struct search : private agsearch {
 
 public:
     void VizualizePattern (HDC hDC, RECT r) {
+        SetBkColor (hDC, 0xEEEEEE);
+
         r.top += 7;
 
         SIZE character;
@@ -44,10 +46,46 @@ public:
                 case token::type::numeric: SetTextColor (hDC, 0x990099); break;
             }
             
+            if (token.type == token::type::string) {
+                SetBkMode (hDC, OPAQUE);
+            } else {
+                SetBkMode (hDC, TRANSPARENT);
+            }
+
             TextOut (hDC,
                      r.left + character.cx * location.column,
                      r.top + (character.cy - 2) * location.row,
                      token.value.c_str (), (int) token.value.length ());
+
+            switch (token.type) {
+                case token::type::numeric:
+                    SetBkMode (hDC, TRANSPARENT);
+                    SetTextColor (hDC, 0xAA88AA);
+
+                    wchar_t buffer [64];
+                    std::swprintf (buffer, 64, L"// %llu (%.3f)", token.integer, token.decimal);
+
+                    TextOut (hDC,
+                             r.left + character.cx * (location.column + token.value.length () + 2),
+                             r.top + (character.cy - 2) * location.row,
+                             buffer, std::wcslen (buffer));
+                    break;
+            }
+
+            switch (token.string_type) {
+                case 'L':
+                case '8':
+                case 'u':
+                case 'U':
+                case 'R':
+                    SetBkMode (hDC, TRANSPARENT);
+                    wchar_t st = token.string_type;
+                    TextOut (hDC,
+                             r.left + character.cx * location.column - 2 * character.cx / 3,
+                             r.top + (character.cy - 2) * location.row + character.cy / 2,
+                             &st, 1);
+                    break;
+            }
         }
     }
 
@@ -68,7 +106,6 @@ public:
         std::swprintf (report, 256, L"%u results in %.2f ms (%s)",
                        (unsigned) results.size (), t,
                        full ? L"FULL RESCAN AND SEARCH" : L"search only");
-
         SetDlgItemText (hWnd, 902, report);
         InvalidateRect (hWnd, NULL, FALSE);
     }
@@ -233,7 +270,7 @@ void Paint (HDC hDC, RECT rc) {
             break;
     }
 
-    rc.left += 3 * rc.right / 4;
+    rc.left += 5 * rc.right / 8;
     search.VizualizePattern (hDC, rc);
 }
 
@@ -265,6 +302,7 @@ std::wstring GetCtrlText (HWND hControl) {
 
 HFONT SetFonts (HWND hWnd) {
     auto hFont = (HFONT) GetStockObject (DEFAULT_GUI_FONT);
+    auto hBoldFont = hFont;
     auto hCodeFont = (HFONT) GetStockObject (ANSI_FIXED_FONT);
 
     NONCLIENTMETRICS metrics {};
@@ -274,8 +312,14 @@ HFONT SetFonts (HWND hWnd) {
             hFont = h;
         }
 
+        metrics.lfMenuFont.lfWeight = FW_BOLD;
+        if (auto h = CreateFontIndirect (&metrics.lfMenuFont)) {
+            hBoldFont = h;
+        }
+
         std::wcscpy (metrics.lfMenuFont.lfFaceName, L"Consolas");
         metrics.lfMenuFont.lfPitchAndFamily = FIXED_PITCH;
+        metrics.lfMenuFont.lfWeight = FW_NORMAL;;
         
         if (metrics.lfMenuFont.lfHeight < 0) {
             metrics.lfMenuFont.lfHeight++;
@@ -293,6 +337,10 @@ HFONT SetFonts (HWND hWnd) {
                           SendMessage (hChild, WM_SETFONT, font, TRUE);
                           return TRUE;
                       }, (LPARAM) hFont);
+    
+    SendDlgItemMessage (hWnd, 1001, WM_SETFONT, (WPARAM) hBoldFont, TRUE);
+    SendDlgItemMessage (hWnd, 1002, WM_SETFONT, (WPARAM) hBoldFont, TRUE);
+    SendDlgItemMessage (hWnd, 1021, WM_SETFONT, (WPARAM) hBoldFont, TRUE);
     return hCodeFont;
 }
 

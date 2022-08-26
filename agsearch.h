@@ -22,6 +22,7 @@ public:
         bool no_comment_distinction = true; // do not distinguish between regular code and commented text
         bool no_strings_distinction = true; // do not distinguish between regular code and strings
 
+        bool case_insensitive_numbers = true;
         bool case_insensitive_strings = true;
         bool case_insensitive_comments = true;
         bool case_insensitive_identifiers = true;
@@ -44,9 +45,15 @@ public:
 
         bool numbers = true; // match different numeric notations
         bool nullptr_is_0 = true;
+        bool boolean_is_integer = true;
 
-        // bool ignore_accelerator_hints_in_strings = false;
-        // bool undecorate_comments = true; // ignore sequences of * characters in comments
+        bool ignore_accelerator_hints_in_strings = true;
+        bool undecorate_comments = true; // ignore sequences of * characters in comments
+
+        // TODO: reorder "const volatile", "static inline", 
+        // TODO: ignore nontype decl specs: "static inline virtual...
+        // TODO: typename -> class, struct -> class
+        // TODO: ignore ": public" or ": virtual public"
 
     } parameters;
 
@@ -82,7 +89,7 @@ public:
     void replace (std::uint32_t row, std::wstring_view line);
 
     // load
-    //  - 
+    //  - load text from container of wstring_views
     //
     template <typename Container>
     void load (const Container & text) {
@@ -117,15 +124,19 @@ protected:
         std::wstring  value;
         std::uint32_t length = 0; // original length
         type          type {};
-        
+        char          string_type = 0; // 0, 'L', 'u', 'U', '8', 'R'
+        bool          unescaped = false;
+
         std::uint64_t integer = 0;
-        std::uint64_t decimal = 0;
+        double        decimal = 0.0;
     };
 
     // pattern
     //  - processed, converted and folded (according to 'parameters') source text
     //
     std::map <location, token> pattern;
+
+    // std::map <location, std::wstring> strings;
 
 private:
 
@@ -139,9 +150,10 @@ private:
     struct {
         enum token::type mode {};
         location         location { 0, 0 };
+        char             string_type = 0;
     } current;
 
-    unsigned int single_line_comment = 0;
+    std::uint8_t single_line_comment = 0;
 
     void normalize ();
     bool compare_tokens (const token &, const token &, std::uint32_t * first, std::uint32_t * last);
@@ -150,10 +162,26 @@ private:
 
     std::wstring fold (std::wstring_view);
 
+    bool is_identifier_initial (wchar_t);
+    bool is_identifier_continuation (wchar_t);
+    bool is_numeric_initial (std::wstring_view);
+
+    struct integer_parse_state {
+        bool real = false;
+        int radix = 10;
+        std::uint64_t integer = 0;
+        double        decimal = 0.0;
+    };
+
+    std::size_t parse_integer_part (std::wstring_view line, integer_parse_state &);
+    std::size_t parse_decimal_part (std::wstring_view line, integer_parse_state &);
+    std::size_t parse_decimal_exponent (std::wstring_view line, integer_parse_state &);
+    std::size_t parse_numeric_suffix (std::wstring_view line, integer_parse_state &);
+
     void append_token (wchar_t c);
     void append_token (std::wstring_view value, std::size_t advance);
     void append_identifier (std::wstring_view value, std::size_t advance);
-    void append_numeric (std::wstring_view value, std::uint64_t integer, std::uint64_t decimal, std::size_t advance);
+    void append_numeric (std::wstring_view value, std::uint64_t integer, double decimal, std::size_t advance);
 };
 
 
