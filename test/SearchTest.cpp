@@ -59,6 +59,7 @@ extern "C" IMAGE_DOS_HEADER __ImageBase;
 HFONT hCodeFont = NULL;
 UINT charWidth = 1;
 UINT nParameters = 0;
+int wheelaccumulator = 0;
 SCROLLINFO scrollbar = { sizeof (SCROLLINFO), 0, 0,0,0,0,0 };
 wchar_t tmpstrbuffer [65536];
 
@@ -448,9 +449,35 @@ LRESULT CALLBACK Procedure (HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
             }
             break;
 
-        case WM_MOUSEWHEEL:
-            // (short) HIWORD (wParam) / WHEEL_DELTA;
-            break;
+        case WM_MOUSEWHEEL: {
+            int lines = 0;
+            if (!SystemParametersInfo (SPI_GETWHEELSCROLLLINES, 0, &lines, FALSE) || lines == 0) {
+                lines = 3;
+            }
+
+            bool change = false;
+            wheelaccumulator += (short) HIWORD (wParam);
+            while (wheelaccumulator >= WHEEL_DELTA / lines) {
+                wheelaccumulator -= WHEEL_DELTA / lines;
+                --scrollbar.nPos;
+                change = true;
+            }
+            while (wheelaccumulator <= -WHEEL_DELTA / lines) {
+                wheelaccumulator += WHEEL_DELTA / lines;
+                ++scrollbar.nPos;
+                change = true;
+            }
+            if (change) {
+                if (scrollbar.nPos < 0) {
+                    scrollbar.nPos = 0;
+                }
+                if (scrollbar.nPos > scrollbar.nMax - scrollbar.nPage) {
+                    scrollbar.nPos = scrollbar.nMax - scrollbar.nPage + 1;
+                }
+                UpdateScrollBar (hWnd);
+                InvalidateRect (hWnd, NULL, FALSE);
+            }
+        } break;
 
         case WM_VSCROLL:
             switch (LOWORD (wParam)) {
