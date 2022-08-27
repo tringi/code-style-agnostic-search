@@ -5,7 +5,8 @@
   `stat nlin boo` == `static inline bool`
 * Linguistic folding, diacritics and case insensitivity of tokens implemented through Windows API NLS
 * Matching different numeric notations  
-  `0x007B`, `0173`, `0b0'0111'1011` all match `123`
+  `0x007B`, `0173`, `0b0'0111'1011` all match `123`  
+  `0x7BuLL` matches `123.0f` unless the option to match integers and floats is turned off
 
 * Option to ignore keyboard accelerator hints (&, Win32 GUI feature) in strings
 * Options to ignore all syntactic tokens, and commas or semicolons, either all or trailing only
@@ -64,7 +65,6 @@
 
 * match different forms of escapes, e.g.: `\n == \013`
 * match escaped characters to actual characters
-* add option whether to match integers and floats, i.e. "123.0f" == "0x007BuLL"
 * match different notations for the same type `"unsigned int" == "int unsigned"`
    * `== "std::uint32_t"` (configurable plaftorm assumptions)
    * ignore redundant
