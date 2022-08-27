@@ -59,7 +59,8 @@ LANGUAGE LANG_ENGLISH, SUBLANG_DEFAULT
     1019 "Ignore all semicolons"
     1020 "Ignore all commas"
     1021 "Match different numeric notations"
-    1022 "Match NULL/nullptr and 0"
-    1023 "Match true/false to 0/1 integers"
-    1024 "Ignore &&'s (keyboard accelerator hints) in strings"
+    1022 "Match integers and floating literals of the same value"
+    1023 "Match NULL/nullptr and 0"
+    1024 "Match true/false to 0/1 integers"
+    1025 "Ignore &&'s (keyboard accelerator hints) in strings"
 }

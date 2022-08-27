@@ -130,8 +130,15 @@ bool agsearch::compare_tokens (const token & a, const token & b, std::uint32_t *
 
     if (parameters.numbers) {
         if ((a.type == token::type::numeric) && (b.type == token::type::numeric)) {
-            if ((a.integer == b.integer) && (a.decimal == b.decimal))
-                return true;
+            
+            if (this->parameters.match_floats_and_integers) {
+                if ((a.integer == b.integer) && (a.decimal == b.decimal))
+                    return true;
+
+            } else {
+                if ((a.is_decimal == b.is_decimal) && (a.integer == b.integer) && (a.decimal == b.decimal))
+                    return true;
+            }
         }
     }
 
@@ -585,6 +592,8 @@ next:
 
         if (this->is_numeric_initial (line)) {
 
+            // integers and floating point literals
+
             integer_parse_state state;
             auto i = this->parse_integer_part (line, state);
             if (i < line.length ()) {
@@ -596,11 +605,14 @@ next:
                 i += this->parse_numeric_suffix (line.substr (i), state);
             }
 
-            this->append_numeric (line.substr (0, i), state.integer, state.decimal, i);
+            this->append_numeric (line.substr (0, i), state.integer, state.real ? &state.decimal : nullptr, i);
             line.remove_prefix (i);
 
         } else
         if (this->is_identifier_initial (line [0])) {
+
+            // 
+
             std::size_t length = 1u;
 
             while ((length < line.length ()) && this->is_identifier_continuation (line [length])) {
@@ -621,14 +633,14 @@ next:
             if (parameters.nullptr_is_0) {
                 if (identifier == L"nullptr" || identifier == L"NULL") {
                     line.remove_prefix (length);
-                    this->append_numeric (identifier, 0, 0, length);
+                    this->append_numeric (identifier, 0, nullptr, length);
                     goto next;
                 }
             }
             if (parameters.boolean_is_integer) {
                 if (identifier == L"true" || identifier == L"false") {
                     line.remove_prefix (length);
-                    this->append_numeric (identifier, (identifier == L"true") ? 1 : 0, 0, length);
+                    this->append_numeric (identifier, (identifier == L"true") ? 1 : 0, nullptr, length);
                     goto next;
                 }
             }
@@ -855,7 +867,7 @@ void agsearch::append_identifier (std::wstring_view value, std::size_t advance) 
     this->current.location.column += advance;
 }
 
-void agsearch::append_numeric (std::wstring_view value, std::uint64_t i, double d, std::size_t advance) {
+void agsearch::append_numeric (std::wstring_view value, std::uint64_t i, double * d, std::size_t advance) {
     token t;
     if (this->current.mode == token::type::code) {
         t.type = token::type::numeric;
@@ -868,7 +880,11 @@ void agsearch::append_numeric (std::wstring_view value, std::uint64_t i, double 
     t.value = value;
     t.length = advance;
     t.integer = i;
-    t.decimal = d;
+
+    if (d) {
+        t.decimal = *d;
+        t.is_decimal = true;
+    }
 
     this->pattern.insert ({ this->current.location, t });
     this->current.location.column += advance;

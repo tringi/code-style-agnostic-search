@@ -44,6 +44,8 @@ public:
         bool ignore_all_commas = false;
 
         bool numbers = true; // match different numeric notations
+        bool match_floats_and_integers = true;
+
         bool nullptr_is_0 = true;
         bool boolean_is_integer = true;
 
@@ -126,6 +128,7 @@ protected:
         type          type {};
         char          string_type = 0; // 0, 'L', 'u', 'U', '8', 'R'
         bool          unescaped = false;
+        bool          is_decimal = false; // float, not integer
 
         std::uint64_t integer = 0;
         double        decimal = 0.0;
@@ -136,7 +139,10 @@ protected:
     //
     std::map <location, token> pattern;
 
-    // std::map <location, std::wstring> strings;
+    // strings
+    //  - unprocessed strings
+    //
+    std::map <location, std::wstring> strings;
 
 private:
 
@@ -181,7 +187,7 @@ private:
     void append_token (wchar_t c);
     void append_token (std::wstring_view value, std::size_t advance);
     void append_identifier (std::wstring_view value, std::size_t advance);
-    void append_numeric (std::wstring_view value, std::uint64_t integer, double decimal, std::size_t advance);
+    void append_numeric (std::wstring_view value, std::uint64_t integer, double * decimal, std::size_t advance);
 };
 
 
