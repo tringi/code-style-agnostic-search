@@ -3,20 +3,16 @@
 #include <CommCtrl.h>
 #include <CommDlg.h>
 #include <ShellAPI.h>
+#include <UXTheme.h>
 
-#include <cwchar>
 #include <cstddef>
-
-// using 'agsearch'
-
 #include "../agsearch.h"
 
 std::vector <std::wstring> file;
 std::vector <std::pair <agsearch::location, agsearch::location>> results;
 
-struct search : private agsearch {
-    using agsearch::load;
-    using agsearch::parameters;
+struct search : agsearch {
+    using agsearch::pattern;
 
     std::size_t find (std::wstring_view needle) {
         ::results.clear ();
@@ -29,66 +25,6 @@ struct search : private agsearch {
     }
 
 public:
-    void VizualizePattern (HDC hDC, RECT r) {
-        SetBkColor (hDC, 0xEEEEEE);
-
-        r.top += 7;
-
-        SIZE character;
-        GetTextExtentPoint32 (hDC, L"W", 1, &character);
-
-        for (auto & [ location, token] : this->pattern) {
-            switch (token.type) {
-                case token::type::code: SetTextColor (hDC, 0x000000); break;
-                case token::type::string: SetTextColor (hDC, 0x2233CC); break;
-                case token::type::comment: SetTextColor (hDC, 0x339933); break;
-                case token::type::identifier: SetTextColor (hDC, 0xCC6633); break;
-                case token::type::numeric: SetTextColor (hDC, 0x990099); break;
-            }
-            
-            if (token.type == token::type::string) {
-                SetBkMode (hDC, OPAQUE);
-            } else {
-                SetBkMode (hDC, TRANSPARENT);
-            }
-
-            TextOut (hDC,
-                     r.left + character.cx * location.column,
-                     r.top + (character.cy - 2) * location.row,
-                     token.value.c_str (), (int) token.value.length ());
-
-            switch (token.type) {
-                case token::type::numeric:
-                    SetBkMode (hDC, TRANSPARENT);
-                    SetTextColor (hDC, 0xAA88AA);
-
-                    wchar_t buffer [64];
-                    std::swprintf (buffer, 64, L"// %llu (%.3f)", token.integer, token.decimal);
-
-                    TextOut (hDC,
-                             r.left + character.cx * (location.column + token.value.length () + 2),
-                             r.top + (character.cy - 2) * location.row,
-                             buffer, std::wcslen (buffer));
-                    break;
-            }
-
-            switch (token.string_type) {
-                case 'L':
-                case '8':
-                case 'u':
-                case 'U':
-                case 'R':
-                    SetBkMode (hDC, TRANSPARENT);
-                    wchar_t st = token.string_type;
-                    TextOut (hDC,
-                             r.left + character.cx * location.column - 2 * character.cx / 3,
-                             r.top + (character.cy - 2) * location.row + character.cy / 2,
-                             &st, 1);
-                    break;
-            }
-        }
-    }
-
     LARGE_INTEGER perfhz;
     LARGE_INTEGER perfT0;
 
@@ -123,6 +59,7 @@ extern "C" IMAGE_DOS_HEADER __ImageBase;
 HFONT hCodeFont = NULL;
 UINT charWidth = 1;
 UINT nParameters = 0;
+SCROLLINFO scrollbar = { sizeof (SCROLLINFO), 0, 0,0,0,0,0 };
 wchar_t tmpstrbuffer [65536];
 
 std::size_t GetFileSize (HANDLE h) {
@@ -133,7 +70,28 @@ std::size_t GetFileSize (HANDLE h) {
         return 0;
 }
 
-void LoadFile (const wchar_t * path) {
+void UpdateScrollBar (HWND hWnd) {
+    scrollbar.fMask = SIF_DISABLENOSCROLL | SIF_PAGE | SIF_POS | SIF_RANGE;
+    scrollbar.nMax = file.size ();
+
+    RECT rClient;
+    if (GetClientRect (hWnd, &rClient)) {
+
+        if (auto hDC = GetDC (hWnd)) {
+            SelectObject (hDC, hCodeFont);
+
+            SIZE character;
+            if (GetTextExtentPoint32 (hDC, L"W", 1, &character)) {
+                scrollbar.nPage = rClient.bottom / (character.cy - 2);
+            }
+            ReleaseDC (hWnd, hDC);
+        }
+    }
+
+    SetScrollInfo (hWnd, SB_VERT, &scrollbar, TRUE);
+}
+
+void LoadFile (HWND hWnd, const wchar_t * path) {
     auto h = CreateFile (path, GENERIC_READ, 7, NULL, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, NULL);
     if (h != INVALID_HANDLE_VALUE) {
 
@@ -212,6 +170,16 @@ void LoadFile (const wchar_t * path) {
     //  - use search.replace function when only single line of code changes
 
     search.load (file);
+    
+    // clear GUI
+
+    search.start ();
+    search.find (L"");
+    search.report (hWnd, true);
+
+    // and rest...
+
+    UpdateScrollBar (hWnd);
 }
 
 void Paint (HDC hDC, RECT rc) {
@@ -230,7 +198,9 @@ void Paint (HDC hDC, RECT rc) {
 
     auto height = character.cy - 2;
 
-    for (auto result : results) {
+    // visualize search results
+
+    for (const auto & result : results) {
         auto points = 4u;
         POINT sp [2] = {
             { character.cx * (LONG) result.first.column, height * (LONG) result.first.row },
@@ -257,21 +227,79 @@ void Paint (HDC hDC, RECT rc) {
 
         for (auto & pt : polygon) {
             pt.x += rc.right / 4;
-            pt.y += 7;
+            pt.y += 7 - height * scrollbar.nPos;
         }
 
         Polygon (hDC, polygon, points);
     }
 
     SetTextColor (hDC, 0x000000);
-    for (auto i = 0; i != file.size (); ++i) {
-        TextOut (hDC, rc.right / 4, 7 + height * i, file [i].c_str (), file [i].length ());
-        if (7 + height * i > rc.bottom)
+    for (std::size_t i = 0; i < scrollbar.nPage; ++i) {
+        if (i + scrollbar.nPos < file.size ()) {
+            const auto & line = file [i + scrollbar.nPos];
+            TextOut (hDC, rc.right / 4, 7 + height * i, line.c_str (), line.length ());
+        } else
             break;
     }
 
+    // visualize pattern
+
+    search.pattern;
+
     rc.left += 5 * rc.right / 8;
-    search.VizualizePattern (hDC, rc);
+
+    SetBkColor (hDC, 0xEEEEEE);
+
+    for (auto & [location, token] : search.pattern) {
+        switch (token.type) {
+            case search::token::type::code: SetTextColor (hDC, 0x000000); break;
+            case search::token::type::string: SetTextColor (hDC, 0x2233CC); break;
+            case search::token::type::comment: SetTextColor (hDC, 0x339933); break;
+            case search::token::type::identifier: SetTextColor (hDC, 0xCC6633); break;
+            case search::token::type::numeric: SetTextColor (hDC, 0x990099); break;
+        }
+
+        if (token.type == search::token::type::string) {
+            SetBkMode (hDC, OPAQUE);
+        } else {
+            SetBkMode (hDC, TRANSPARENT);
+        }
+
+        TextOut (hDC,
+                 rc.left + character.cx * location.column,
+                 rc.top + (character.cy - 2) * location.row + 7 - height * scrollbar.nPos,
+                 token.value.c_str (), (int) token.value.length ());
+
+        /*switch (token.type) {
+            case token::type::numeric:
+                SetBkMode (hDC, TRANSPARENT);
+                SetTextColor (hDC, 0xAA88AA);
+
+                wchar_t buffer [64];
+                std::swprintf (buffer, 64, L"// %llu (%.3f)", token.integer, token.decimal);
+
+                TextOut (hDC,
+                         r.left + character.cx * (location.column + token.value.length () + 2),
+                         r.top + (character.cy - 2) * location.row,
+                         buffer, std::wcslen (buffer));
+                break;
+        }*/
+
+        switch (token.string_type) {
+            case 'L':
+            case '8':
+            case 'u':
+            case 'U':
+            case 'R':
+                SetBkMode (hDC, TRANSPARENT);
+                wchar_t st = token.string_type;
+                TextOut (hDC,
+                         rc.left + character.cx * location.column - 2 * character.cx / 3,
+                         rc.top + (character.cy - 2) * location.row + character.cy / 2 + 7 - height * scrollbar.nPos,
+                         &st, 1);
+                break;
+        }
+    }
 }
 
 const wchar_t * LoadTmpString (UINT id) {
@@ -298,6 +326,10 @@ std::wstring GetCtrlText (HWND hControl) {
     text.resize (GetWindowTextLength (hControl));
     GetWindowText (hControl, &text [0], text.size () + 1);
     return text;
+}
+
+void SetParameterFont (HWND hWnd, HFONT hFont, std::size_t offset) {
+    SendDlgItemMessage (hWnd, 1001 + offset, WM_SETFONT, (WPARAM) hFont, TRUE);
 }
 
 HFONT SetFonts (HWND hWnd) {
@@ -338,9 +370,9 @@ HFONT SetFonts (HWND hWnd) {
                           return TRUE;
                       }, (LPARAM) hFont);
     
-    SendDlgItemMessage (hWnd, 1001, WM_SETFONT, (WPARAM) hBoldFont, TRUE);
-    SendDlgItemMessage (hWnd, 1002, WM_SETFONT, (WPARAM) hBoldFont, TRUE);
-    SendDlgItemMessage (hWnd, 1021, WM_SETFONT, (WPARAM) hBoldFont, TRUE);
+    SetParameterFont (hWnd, hBoldFont, offsetof (agsearch::parameter_set, whole_words));
+    SetParameterFont (hWnd, hBoldFont, offsetof (agsearch::parameter_set, individual_partial_words));
+    SetParameterFont (hWnd, hBoldFont, offsetof (agsearch::parameter_set, numbers));
     return hCodeFont;
 }
 
@@ -383,7 +415,7 @@ LRESULT CALLBACK Procedure (HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
         case WM_GETMINMAXINFO:
             if (auto mmi = reinterpret_cast <MINMAXINFO *> (lParam)) {
                 mmi->ptMinTrackSize.x = 600;
-                mmi->ptMinTrackSize.y = 220 + 20 * nParameters;
+                mmi->ptMinTrackSize.y = 220 + 18 * nParameters;
             }
             break;
 
@@ -412,7 +444,58 @@ LRESULT CALLBACK Procedure (HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
                         }
                     }
                 }
+                UpdateScrollBar (hWnd);
             }
+            break;
+
+        case WM_MOUSEWHEEL:
+            // (short) HIWORD (wParam) / WHEEL_DELTA;
+            break;
+
+        case WM_VSCROLL:
+            switch (LOWORD (wParam)) {
+                case SB_TOP:
+                    scrollbar.nPos = 0;
+                    break;
+                case SB_LINEUP:
+                    if (scrollbar.nPos) {
+                        scrollbar.nPos--;
+                    }
+                    break;
+                case SB_PAGEUP:
+                    if (scrollbar.nPos >= scrollbar.nPage) {
+                        scrollbar.nPos -= scrollbar.nPage;
+                    } else {
+                        scrollbar.nPos = 0;
+                    }
+                    break;
+                case SB_LINEDOWN:
+                    if (scrollbar.nPos <= scrollbar.nMax - scrollbar.nPage) {
+                        scrollbar.nPos++;
+                    }
+                    break;
+                case SB_PAGEDOWN:
+                    scrollbar.nPos += scrollbar.nPage;
+                    if (scrollbar.nPos > scrollbar.nMax - scrollbar.nPage) {
+                        scrollbar.nPos = scrollbar.nMax - scrollbar.nPage + 1;
+                    }
+                    break;
+
+                case SB_BOTTOM:
+                    if (scrollbar.nMax < scrollbar.nPage) {
+                        scrollbar.nPos = scrollbar.nMax - scrollbar.nPage;
+                    }
+                    break;
+
+                case SB_THUMBTRACK:
+                case SB_THUMBPOSITION:
+                    scrollbar.fMask = SIF_TRACKPOS;
+                    if (GetScrollInfo (hWnd, SB_VERT, &scrollbar)) {
+                        scrollbar.nPos = scrollbar.nTrackPos;
+                    }
+            }
+            UpdateScrollBar (hWnd);
+            InvalidateRect (hWnd, NULL, FALSE);
             break;
 
         case WM_COMMAND:
@@ -445,7 +528,7 @@ LRESULT CALLBACK Procedure (HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
                     ofn.lpstrDefExt = L"cpp";
 
                     if (GetOpenFileName (&ofn)) {
-                        LoadFile (tmpstrbuffer);
+                        LoadFile (hWnd, tmpstrbuffer);
                         InvalidateRect (hWnd, NULL, FALSE);
                     }
                 } break;
@@ -486,9 +569,16 @@ LRESULT CALLBACK Procedure (HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
         case WM_PAINT: {
             PAINTSTRUCT ps;
             if (HDC hDC = BeginPaint (hWnd, &ps)) {
-                RECT client;
-                if (GetClientRect (hWnd, &client)) {
-                    Paint (hDC, client);
+
+                HDC hBufferedDC = NULL;
+                if (HPAINTBUFFER hPaintBuffer = BeginBufferedPaint (hDC, &ps.rcPaint, BPBF_COMPATIBLEBITMAP, NULL, &hBufferedDC)) {
+
+                    RECT client;
+                    if (GetClientRect (hWnd, &client)) {
+                        Paint (hBufferedDC, client);
+                    }
+
+                    EndBufferedPaint (hPaintBuffer, TRUE);
                 }
                 EndPaint (hWnd, &ps);
             }
@@ -527,8 +617,7 @@ LPCTSTR Initialize (HINSTANCE hInstance) {
 
 int CALLBACK wWinMain (_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow) {
     InitCommonControls ();
-
-        AllocConsole ();
+    BufferedPaintInit ();
 
     if (auto atom = Initialize (hInstance)) {
         auto menu = LoadMenu (hInstance, MAKEINTRESOURCE (1));
@@ -536,9 +625,9 @@ int CALLBACK wWinMain (_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR
         
         static const auto D = CW_USEDEFAULT;
         if (auto hWnd = CreateWindow (atom, LoadTmpString (1),
-                                      WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, D,D,D,D,
+                                      WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_VSCROLL, D,D,D,D,
                                       HWND_DESKTOP, menu, hInstance, NULL)) {
-            ShowWindow (hWnd, nCmdShow);
+            ShowWindow (hWnd, SW_MAXIMIZE);
 
             if (*lpCmdLine) {
                 if (*lpCmdLine == '\"') {
@@ -551,7 +640,7 @@ int CALLBACK wWinMain (_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR
                     e [-1] = '\0';
                 }
                 if (*lpCmdLine) {
-                    LoadFile (lpCmdLine);
+                    LoadFile (hWnd, lpCmdLine);
                 }
             }
 
