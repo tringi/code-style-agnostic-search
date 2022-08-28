@@ -191,8 +191,8 @@ void Paint (HDC hDC, RECT rc) {
     FillRect (hDC, &rc, GetSysColorBrush (COLOR_WINDOW));
 
     SetBkMode (hDC, TRANSPARENT);
-    SetDCPenColor (hDC, 0x806060);
-    SetDCBrushColor (hDC, 0xE0D0D0);
+    SetDCPenColor (hDC, 0x0000FF);
+    SetDCBrushColor (hDC, 0xD0D0FF);
 
     SIZE character;
     GetTextExtentPoint32 (hDC, L"W", 1, &character);
