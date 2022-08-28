@@ -4,13 +4,19 @@
 * Individual partial words matching, on top of classic whole word matching on/off modes  
   `stat nlin boo` == `static inline bool`
 * Linguistic folding, diacritics and case insensitivity of tokens implemented through Windows API NLS
+* Entering query (or part) as `/*comment*/` or `"string"` searches (that part) within comments/strings only
 * Matching different numeric notations  
   `0x007B`, `0173`, `0b0'0111'1011` all match `123`  
   `0x7BuLL` matches `123.0f` unless the option to match integers and floats is turned off
+* Matching specific language tokens to their numeric values
+   * `true` and `false` match 0/1
+   * `NULL` and `nullptr` match 0
 
 * Option to ignore keyboard accelerator hints (&, Win32 GUI feature) in strings
-* Options to ignore all syntactic tokens, and commas or semicolons, either all or trailing only
+* Options to ignore all syntactic tokens, or braces, brackets or parentheses in particular
+   * For commas or semicolons it's either all or trailing only
 * Matching digraphs, trigraphs and ISO646 alternative tokens to primary tokens they represent
+* Removes `*` and `/` decorations from comments before searching
 
 ## Example program
 
