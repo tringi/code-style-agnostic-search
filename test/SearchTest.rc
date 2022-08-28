@@ -66,4 +66,5 @@ LANGUAGE LANG_ENGLISH, SUBLANG_DEFAULT
     1026 "Ignore &&'s (keyboard accelerator hints) in strings"
     1027 "Ignore excessive * and / decorations in comments"
     1028 "Match if/else to conditional operator (?:)"
+    1029 "Match class, struct and typename"
 }

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cwctype>
 #include <cmath>
+#include <set>
 
 namespace {
     static constexpr std::wstring_view whitespace = L" \f\n\r\t\v\x1680\x180E\x2002\x2003\x2004\x2005\x2006\x2007\x2008\x2009\x200A\x200B\x202F\x205F\x2060\x3000\xFEFF\xFFFD\0";
@@ -40,6 +41,21 @@ namespace {
         { 't', '\t' }, { 'v', '\v' },
     };
 
+    struct alternative_spelling {
+        bool agsearch::parameter_set::* option;
+        std::set <std::wstring>         spellings;
+
+        bool operator < (const alternative_spelling & other) const noexcept {
+            return this->spellings < other.spellings;
+        }
+    };
+    static const std::set <alternative_spelling> alternative_spellings = {
+        { &agsearch::parameter_set::match_ifs_and_conditional, { L"if", L"?" } },
+        { &agsearch::parameter_set::match_class_struct_typename, { L"class", L"struct", L"typename" } },
+    };
+    static const std::set <alternative_spelling> alternative_spellings_optional = {
+        { &agsearch::parameter_set::match_ifs_and_conditional, { L"else", L":" } },
+    };
 }
 
 void agsearch::clear () {
@@ -126,6 +142,9 @@ std::size_t agsearch::find (std::wstring_view needle_text) {
                                            (s == is) ? &fx : nullptr,
                                            is_preceeding_iterator (s, es) ? &lx : nullptr))
                     break;
+
+                // && not withing ignorable pattern, i.e. :birtual public where ':' is required and rest is optional
+
             }
             ++ipattern;
         }
@@ -152,11 +171,13 @@ bool agsearch::compare_tokens (const token & a, const token & b, std::uint32_t *
     }
 
     if ((a.type == token::type::code) || (b.type == token::type::code)) {
-        if ((a.type == token::type::code) && (b.type == token::type::code)) {
-            return a.value == b.value;
-        } else {
-            return false;
-        }
+
+        // fast path for language symbols comparison
+
+        if ((a.type == token::type::code) && (b.type == token::type::code))
+            if (a.value == b.value)
+                return true;
+
     } else {
 
         // if I enter regular query, I want it match everything
@@ -203,18 +224,18 @@ bool agsearch::compare_tokens (const token & a, const token & b, std::uint32_t *
         }
 
         if (this->parameters.whole_words) {
-            return CompareStringEx (LOCALE_NAME_INVARIANT, flags,
-                                    a.value.data (), (int) a.value.size (),
-                                    b.value.data (), (int) b.value.size (),
-                                    NULL, NULL, 0)
-                == CSTR_EQUAL;
+            if (CompareStringEx (LOCALE_NAME_INVARIANT, flags,
+                                 a.value.data (), (int) a.value.size (),
+                                 b.value.data (), (int) b.value.size (),
+                                 NULL, NULL, 0) == CSTR_EQUAL)
+                return true;
         } else
         if (this->parameters.individual_partial_words) {
-            return FindNLSStringEx (LOCALE_NAME_INVARIANT, flags,
-                                    a.value.data (), (int) a.value.size (),
-                                    b.value.data (), (int) b.value.size (),
-                                    NULL, NULL, NULL, 0)
-                != -1;
+            if (FindNLSStringEx (LOCALE_NAME_INVARIANT, flags,
+                                 a.value.data (), (int) a.value.size (),
+                                 b.value.data (), (int) b.value.size (),
+                                 NULL, NULL, NULL, 0) != -1)
+                return true;
         } else {
             if (first || last) {
                 auto length = 0;
@@ -230,18 +251,32 @@ bool agsearch::compare_tokens (const token & a, const token & b, std::uint32_t *
                         *last = (std::uint32_t) (a.value.size () - length - offset);
                     }
                     return true;
-                } else
-                    return false;
-
+                }
             } else {
-                return CompareStringEx (LOCALE_NAME_INVARIANT, flags,
-                                        a.value.data (), (int) a.value.size (),
-                                        b.value.data (), (int) b.value.size (),
-                                        NULL, NULL, 0)
-                    == CSTR_EQUAL;
+                if (CompareStringEx (LOCALE_NAME_INVARIANT, flags,
+                                     a.value.data (), (int) a.value.size (),
+                                     b.value.data (), (int) b.value.size (),
+                                     NULL, NULL, 0) == CSTR_EQUAL)
+                    return true;
             }
         }
     }
+
+    // alternative spellings
+
+    for (auto & as : alternative_spellings) {
+        if (this->parameters.*as.option)
+            if (as.spellings.count (a.value) && as.spellings.count (b.value))
+                return true;
+    }
+    if (a.opt_alt_spelling_allowed || b.opt_alt_spelling_allowed) {
+        for (auto & as : alternative_spellings_optional)
+            if (this->parameters.*as.option)
+                if (as.spellings.count (a.value) && as.spellings.count (b.value))
+                    return true;
+    }
+
+    return false;
 }
 
 void agsearch::process_text (std::wstring_view input) {
@@ -968,19 +1003,16 @@ void agsearch::append_token (wchar_t c) {
 
 void agsearch::normalize_needle () {
 
-    // convert ?: into if-else
+    // detect which ':' can be converted into else
 
     if (this->parameters.match_ifs_and_conditional) {
         auto n = 0u;
         for (auto & [location, token] : this->pattern) {
             if (token.value == L"?") {
-                token.value = L"if";
-                token.type = token::type::identifier;
                 ++n;
             } else
             if (n && (token.value == L":")) {
-                token.value = L"else";
-                token.type = token::type::identifier;
+                token.opt_alt_spelling_allowed = true;
                 --n;
             }
         }

@@ -61,7 +61,7 @@ public:
         // token transformations
 
         bool match_ifs_and_conditional = true;
-        // bool match_class_struct_typename = true; // TODO: typename -> class, struct -> class
+        bool match_class_struct_typename = true;
         // TODO: ignore ": public" or ": virtual public"
 
         // TODO: matching different int declarations
@@ -139,8 +139,8 @@ public:
         std::uint32_t length = 0; // original length
         type          type {};
         char          string_type = 0; // 0, 'L', 'u', 'U', '8', 'R'
-        bool          unescaped = false;
         bool          is_decimal = false; // float, not integer
+        bool          opt_alt_spelling_allowed = false;
 
         std::uint64_t integer = 0;
         double        decimal = 0.0;
