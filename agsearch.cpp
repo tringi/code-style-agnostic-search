@@ -538,6 +538,26 @@ namespace {
         } else
             return C (0);
     }
+
+    // assume line[0] == L'\'';
+    std::size_t character_literal_length (std::wstring_view line) {
+        
+        std::size_t e = 1u;
+        while (e < line.length ()) {
+            switch (line [e]) {
+                case L'\'':
+                    return e + 1;
+
+                case L'\\':
+                    e += 2;
+                    break;
+
+                default:
+                    e += 1;
+            }
+        }
+        return line.length ();
+    }
 }
 
 std::size_t agsearch::parse_numeric_suffix (std::wstring_view line, integer_parse_state & state) {
@@ -732,7 +752,7 @@ next:
                         goto next;
                     }
                     if (line.starts_with (L'\'')) {
-                        if (auto e = line.find (L'\'', 1) + 1) {
+                        if (auto e = character_literal_length (line)) {
                             
                             // encode string prefix, e.g.: 'L' in L'x' 
 
@@ -747,18 +767,13 @@ next:
                                     this->pattern.erase (get_preceeding_iterator (this->pattern.end ()));
                                 }
                             }
-
-                            /*while (line [e - 1] == L'\\') {
-                                e = line.find (L'\'', e + 1) + 1;
-                                if (!e)
-                                    break;
-                            }*/
-
-                            this->current.mode = token::type::string;
-                            this->append_token (line.substr (1, e - 2), e);
-                            this->current.mode = token::type::code;
+                            
+                            if (e > 1) {
+                                this->current.mode = token::type::string;
+                                this->append_token (line.substr (1, e - 2), e);
+                                this->current.mode = token::type::code;
+                            }
                             line.remove_prefix (e);
-
                             goto next;
                         }
                     }
