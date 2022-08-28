@@ -54,7 +54,7 @@ void agsearch::replace (std::uint32_t row, std::wstring_view line) {
                          this->pattern.lower_bound ({ row + 1, 0 }));
     this->current.location.row = row;
     this->process_text (line);
-    this->normalize ();
+    this->normalize_full ();
 }
 
 namespace {
@@ -77,41 +77,48 @@ std::size_t agsearch::find (std::wstring_view needle_text) {
     agsearch needle;
     needle.parameters = this->parameters;
     needle.process_text (needle_text);
-    needle.normalize ();
+    needle.normalize_needle ();
 
     // no cleverness about empty sets
 
     if (!this->pattern.empty () && !needle.pattern.empty ()) {
         
         // basic search algorithm
+        // TODO: parallel search in 'strings' and 'reordered' - remember last result and ignore repeats
 
-        auto ih = this->pattern.cbegin ();
-        auto eh = this->pattern.cend ();
+        auto ipattern = this->pattern.cbegin ();
+        auto epattern = this->pattern.cend ();
         auto is = needle.pattern.cbegin ();
         auto es = needle.pattern.cend ();
 
+        location prev_b = { -1, -1 };
+        location prev_e = { -1, -1 };
         std::size_t n = 0;
 
         while (true) {
             std::uint32_t fx = 0; // start index in partially found first token
             std::uint32_t lx = 0; // length of partially found last token
 
-            auto i = ih;
+            auto i = ipattern;
             for (auto s = is; ; ++i, ++s) {
                 if (s == es) {
 
-                    auto e = get_preceeding_iterator (i);
-                    if (this->found (needle_text, n++,
-                                     { ih->first.row, ih->first.column + fx },
-                                     { e->first.row, e->first.column + e->second.length - lx})) {
-                        std::advance (ih, needle.pattern.size () - 1);
+                    auto lastfind = get_preceeding_iterator (i);
+                    location found_b = { ipattern->first.row, ipattern->first.column + fx };
+                    location found_e = { lastfind->first.row, lastfind->first.column + lastfind->second.length - lx };
+
+                    if (this->found (needle_text, n++, found_b, found_e)) {
+                        std::advance (ipattern, needle.pattern.size () - 1);
+
+                        prev_b = found_b;
+                        prev_e = found_e;
                         break;
                     } else
                         return n;
                 }
 
                 // end of search
-                if (i == eh)
+                if (i == epattern)
                     return n;
 
                 // compare tokens properly
@@ -120,13 +127,15 @@ std::size_t agsearch::find (std::wstring_view needle_text) {
                                            is_preceeding_iterator (s, es) ? &lx : nullptr))
                     break;
             }
-            ++ih;
+            ++ipattern;
         }
     } else
         return 0;
 }
 
 bool agsearch::compare_tokens (const token & a, const token & b, std::uint32_t * first, std::uint32_t * last) {
+
+    // NOTE: 'a' is the pattern/haystack, 'b' is always the searched query/needle
 
     if (parameters.numbers) {
         if ((a.type == token::type::numeric) && (b.type == token::type::numeric)) {
@@ -149,13 +158,16 @@ bool agsearch::compare_tokens (const token & a, const token & b, std::uint32_t *
             return false;
         }
     } else {
-        if (!this->parameters.no_comment_distinction) {
-            if ((a.type == token::type::comment) ^ (b.type == token::type::comment))
-                return false;
-        }
-        if (!this->parameters.no_strings_distinction) {
-            if ((a.type == token::type::string) ^ (b.type == token::type::string))
-                return false;
+
+        // if I enter regular query, I want it match everything
+        //  - if I explicitly enter "string" I want it to match only strings
+        //  - if I explicitly enter //comment I want it to match only comments
+
+        switch (b.type) {
+            case token::type::string:
+            case token::type::comment:
+                if (a.type != b.type)
+                    return false;
         }
 
         DWORD flags = 0;
@@ -571,6 +583,16 @@ void agsearch::process_line (std::wstring_view line) {
         // this->unescape_strings (line, unescaped);
     }
 
+    // strings
+
+    /*switch (this->current.mode) {
+        case token::type::string:
+            // find ending "
+            break;
+        case token::type::code:
+            break;
+    }*/
+
     // trim the end
     //  - makes some options below easier
 
@@ -582,13 +604,13 @@ void agsearch::process_line (std::wstring_view line) {
 next:
         // skip whitespace
 
-        {   auto n = line.find_first_not_of (whitespace);
-            if (n != std::wstring_view::npos) {
-                this->current.location.column += n;
-                line.remove_prefix (n);
-            } else
-                break;
-        }
+        auto skipped_whitespace = line.find_first_not_of (whitespace);
+        if (skipped_whitespace != std::wstring_view::npos) {
+            this->current.location.column += skipped_whitespace;
+            line.remove_prefix (skipped_whitespace);
+        } else
+            break;
+        
 
         if (this->is_numeric_initial (line)) {
 
@@ -611,7 +633,7 @@ next:
         } else
         if (this->is_identifier_initial (line [0])) {
 
-            // 
+            // identifiers, functions, names, word operators, etc.
 
             std::size_t length = 1u;
 
@@ -675,7 +697,35 @@ next:
                         goto next;
                     }
                     if (line.starts_with (L'\'')) {
-                        // TODO: code token, number, or string, or both?
+                        if (auto e = line.find (L'\'', 1) + 1) {
+                            
+                            // encode string prefix, e.g.: 'L' in L'x' 
+
+                            if (!this->pattern.empty ()) {
+                                auto & last = this->pattern.crbegin ()->second;
+                                if ((last.type == token::type::identifier) && (last.value.length () == 1)) {
+
+                                    this->current.string_type = (char) last.value [0];
+
+                                    // remove the token with the letter
+
+                                    this->pattern.erase (get_preceeding_iterator (this->pattern.end ()));
+                                }
+                            }
+
+                            /*while (line [e - 1] == L'\\') {
+                                e = line.find (L'\'', e + 1) + 1;
+                                if (!e)
+                                    break;
+                            }*/
+
+                            this->current.mode = token::type::string;
+                            this->append_token (line.substr (1, e - 2), e);
+                            this->current.mode = token::type::code;
+                            line.remove_prefix (e);
+
+                            goto next;
+                        }
                     }
                     if (line.starts_with (L'"')) {
                         line.remove_prefix (1);
@@ -706,6 +756,13 @@ next:
                         this->current.mode = token::type::code;
 
                         goto next;
+                    }
+                    if (this->parameters.undecorate_comments) {
+                        if (line.starts_with (L'*') || line.starts_with (L'/')) {
+                            line.remove_prefix (1);
+                            this->current.location.column += 1;
+                            goto next;
+                        }
                     }
                     break;
 
@@ -775,6 +832,21 @@ next:
                 line.remove_prefix (1);
                 goto next;
             }
+            if (parameters.ignore_all_parentheses && ((line [0] == L'(') || (line [0] == L')'))) {
+                ++this->current.location.column;
+                line.remove_prefix (1);
+                goto next;
+            }
+            if (parameters.ignore_all_brackets && ((line [0] == L'[') || (line [0] == L']'))) {
+                ++this->current.location.column;
+                line.remove_prefix (1);
+                goto next;
+            }
+            if (parameters.ignore_all_braces && ((line [0] == L'{') || (line [0] == L'}'))) {
+                ++this->current.location.column;
+                line.remove_prefix (1);
+                goto next;
+            }
             if (parameters.ignore_all_commas && (line [0] == L',')) {
                 ++this->current.location.column;
                 line.remove_prefix (1);
@@ -839,14 +911,14 @@ void agsearch::append_token (std::wstring_view value, std::size_t advance) {
     token t;
     t.type = this->current.mode;
     t.value = value;
-    t.length = advance;
+    t.length = (std::uint32_t) advance;
 
     if (this->current.mode == token::type::string) {
         t.string_type = this->current.string_type;
     }
 
     this->pattern.insert ({ this->current.location, t });
-    this->current.location.column += advance;
+    this->current.location.column += (std::uint32_t) advance;
 }
 
 void agsearch::append_identifier (std::wstring_view value, std::size_t advance) {
@@ -861,10 +933,10 @@ void agsearch::append_identifier (std::wstring_view value, std::size_t advance) 
     }
 
     t.value = this->fold (value);
-    t.length = advance;
+    t.length = (std::uint32_t) advance;
 
     this->pattern.insert ({ this->current.location, t });
-    this->current.location.column += advance;
+    this->current.location.column += (std::uint32_t) advance;
 }
 
 void agsearch::append_numeric (std::wstring_view value, std::uint64_t i, double * d, std::size_t advance) {
@@ -878,7 +950,7 @@ void agsearch::append_numeric (std::wstring_view value, std::uint64_t i, double 
         t.string_type = this->current.string_type;
     }
     t.value = value;
-    t.length = advance;
+    t.length = (std::uint32_t) advance;
     t.integer = i;
 
     if (d) {
@@ -887,14 +959,32 @@ void agsearch::append_numeric (std::wstring_view value, std::uint64_t i, double 
     }
 
     this->pattern.insert ({ this->current.location, t });
-    this->current.location.column += advance;
+    this->current.location.column += (std::uint32_t) advance;
 }
 
 void agsearch::append_token (wchar_t c) {
     return this->append_token (std::wstring_view (&c, 1), 1);
 }
 
-void agsearch::normalize () {
+void agsearch::normalize_needle () {
+
+    // convert ?: into if-else
+
+    if (this->parameters.match_ifs_and_conditional) {
+        auto n = 0u;
+        for (auto & [location, token] : this->pattern) {
+            if (token.value == L"?") {
+                token.value = L"if";
+                token.type = token::type::identifier;
+                ++n;
+            } else
+            if (n && (token.value == L":")) {
+                token.value = L"else";
+                token.type = token::type::identifier;
+                --n;
+            }
+        }
+    }
 
     // ignore accelerator hints in strings
     //  - removes sole '&' inside strings; NOTE that string are tokenized too, so it may not always work
@@ -905,7 +995,7 @@ void agsearch::normalize () {
 
                 auto i = std::wstring::npos;
                 while ((i = token.value.find (L'&', i + 1)) != std::wstring::npos) {
-                    
+
                     if ((i < token.value.length () - 1) && (token.value [i + 1] == L'&')) {
                         token.value.erase (i, 1);
                         ++i;
@@ -917,13 +1007,90 @@ void agsearch::normalize () {
         }
     }
 
-    if (this->parameters.undecorate_comments) {
-        for (auto & [location, token] : this->pattern) {
-            if (token.type == token::type::comment) {
+}
 
+void agsearch::normalize_full () {
+    this->normalize_needle ();
+
+    // combine adjacent strings
+    //  - currently limited to single row
+    //  - TODO: combine strings preceeded by L or U token properly
+    //  - BUG BUG: updated 'length' yields visually incorrect end offset, we need to introduce skip-list or something
+
+    if (false/*!this->pattern.empty ()*/) {
+        auto i = this->pattern.begin ();
+        auto j = i; ++j;
+        auto e = this->pattern.end ();
+
+        while (j != e) {
+            if ((i->second.type == token::type::string) && (j->second.type == token::type::string) && (i->first.row == j->first.row)) {
+
+                i->second.value += j->second.value;
+                i->second.length = j->first.column + j->second.length - i->first.column - i->second.length;
+
+                j = this->pattern.erase (j);
+            } else {
+                ++i;
+                ++j;
             }
         }
     }
+
+    // unescape strings
+
+    /*if (this->parameters.unescape) {
+        for (auto & [location, token] : this->pattern) {
+            if ((token.type == token::type::string) && !token.unescaped) {
+
+                auto i = std::wstring::npos;
+                while ((i = token.value.find (L'\\', i + 1)) != std::wstring::npos) {
+                    if (i < token.value.length () - 1) {
+
+                        wchar_t aaa [256];
+                        std::swprintf (aaa, 256, L"%u:%u '%c'\r\n", location.row, location.column, token.value [i + 1]);
+//                        std::swprintf (aaa, 256, L"combine \"%s\" and \"%s\"\r\n", i->second.value.c_str (), j->second.value.c_str ());
+                        DWORD n;
+                        WriteConsole (GetStdHandle (STD_OUTPUT_HANDLE), aaa, std::wcslen (aaa), &n, NULL);
+
+
+                        switch (auto c = token.value [i + 1]) {
+                            case L'x': // \x##
+
+                                break;
+                            case L'u': // \u####
+
+                                break;
+                            case L'U': // \u########
+
+                                break;
+                            default:
+                                if (std::iswdigit (c)) {
+
+
+                                } else {
+                                    auto j = single_letter_escape_sequences.find (c);
+                                    if (j != single_letter_escape_sequences.end ()) {
+
+                                         token.value.replace (i, 2, 1, j->second);
+                                        ++i;
+                                    } else {
+
+                                        // \000
+
+                                        token.value.erase (i);
+                                    }
+                                    // unescaped.erase (i, 1);
+                                    // unescaped.replace (i, ..., L'');
+                                }
+                                break;
+                        }
+                    }
+                }
+
+                token.unescaped = true;
+            }
+        }
+    }*/
 
     // TODO: normalize order of tokens
     // TODO: normalize order of integer specs, remove redundand words but fix location & length

@@ -19,9 +19,6 @@ public:
         bool whole_words = false; // match only whole words
         bool individual_partial_words = false; // match partial words even individually
 
-        bool no_comment_distinction = true; // do not distinguish between regular code and commented text
-        bool no_strings_distinction = true; // do not distinguish between regular code and strings
-
         bool case_insensitive_numbers = true;
         bool case_insensitive_strings = true;
         bool case_insensitive_comments = true;
@@ -35,13 +32,16 @@ public:
         bool trigraphs = true;  // match trigraphs to corresponding tokens TODO: do not implement
         bool iso646 = true;     // match ISO646 tokens to corresponding operators
 
-        bool unescape = true;
-
         bool ignore_all_syntactic_tokens = false; // simply do not insert tokens to pattern
+        bool ignore_all_parentheses = false;
+        bool ignore_all_brackets = false;
+        bool ignore_all_braces = false;
         bool ignore_trailing_semicolons = false;
         bool ignore_trailing_commas = false;
         bool ignore_all_semicolons = false;
         bool ignore_all_commas = false;
+
+        // numerics
 
         bool numbers = true; // match different numeric notations
         bool match_floats_and_integers = true;
@@ -49,13 +49,24 @@ public:
         bool nullptr_is_0 = true;
         bool boolean_is_integer = true;
 
+        // strings
+
+        bool unescape = true;
         bool ignore_accelerator_hints_in_strings = true;
+
+        // comments
+
         bool undecorate_comments = true; // ignore sequences of * characters in comments
 
+        // token transformations
+
+        bool match_ifs_and_conditional = true;
+        // bool match_class_struct_typename = true; // TODO: typename -> class, struct -> class
+        // TODO: ignore ": public" or ": virtual public"
+
+        // TODO: matching different int declarations
         // TODO: reorder "const volatile", "static inline", 
         // TODO: ignore nontype decl specs: "static inline virtual...
-        // TODO: typename -> class, struct -> class
-        // TODO: ignore ": public" or ": virtual public"
 
     } parameters;
 
@@ -81,7 +92,7 @@ public:
     //
     void append (std::wstring_view text) {
         this->process_text (text);
-        this->normalize ();
+        this->normalize_full ();
     }
     
     // replace
@@ -99,7 +110,7 @@ public:
         for (auto & line : text) {
             this->process_text (line);
         }
-        this->normalize ();
+        this->normalize_full ();
     }
 
     // find
@@ -109,7 +120,8 @@ public:
     //
     std::size_t find (std::wstring_view needle);
 
-protected:
+public:
+//protected:
 
     // token
     //  - represents an element of pre-processed source text
@@ -134,13 +146,21 @@ protected:
         double        decimal = 0.0;
     };
 
+protected:
+
     // pattern
     //  - processed, converted and folded (according to 'parameters') source text
     //
     std::map <location, token> pattern;
 
+    // reordered pattern
+    //  - we need second one not to lose resuls of other kinds of matches
+    //
+    std::map <location, token> reordered;
+
     // strings
-    //  - unprocessed strings
+    //  - unprocessed/untokenized strings for plain-text search
+    //  - regular pattern contains tokenized string (searched like code)
     //
     std::map <location, std::wstring> strings;
 
@@ -154,14 +174,15 @@ private:
 
 private:
     struct {
-        enum token::type mode {};
+        enum token::type mode {}; // code, string or comment
         location         location { 0, 0 };
         char             string_type = 0;
     } current;
 
     std::uint8_t single_line_comment = 0;
 
-    void normalize ();
+    void normalize_needle ();
+    void normalize_full ();
     bool compare_tokens (const token &, const token &, std::uint32_t * first, std::uint32_t * last);
     void process_text (std::wstring_view text);
     void process_line (std::wstring_view line);
