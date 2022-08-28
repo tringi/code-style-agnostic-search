@@ -73,7 +73,7 @@ std::size_t GetFileSize (HANDLE h) {
 
 void UpdateScrollBar (HWND hWnd) {
     scrollbar.fMask = SIF_DISABLENOSCROLL | SIF_PAGE | SIF_POS | SIF_RANGE;
-    scrollbar.nMax = file.size ();
+    scrollbar.nMax = (int) file.size ();
 
     RECT rClient;
     if (GetClientRect (hWnd, &rClient)) {
@@ -238,7 +238,7 @@ void Paint (HDC hDC, RECT rc) {
     for (std::size_t i = 0; i < scrollbar.nPage; ++i) {
         if (i + scrollbar.nPos < file.size ()) {
             const auto & line = file [i + scrollbar.nPos];
-            TextOut (hDC, rc.right / 4, 7 + height * i, line.c_str (), line.length ());
+            TextOut (hDC, rc.right / 4, 7 + height * i, line.c_str (), (int) line.length ());
         } else
             break;
     }
@@ -325,12 +325,12 @@ void InitOpenDlgMask (UINT id, wchar_t * mask, std::size_t size) {
 std::wstring GetCtrlText (HWND hControl) {
     std::wstring text;
     text.resize (GetWindowTextLength (hControl));
-    GetWindowText (hControl, &text [0], text.size () + 1);
+    GetWindowText (hControl, &text [0], (int) text.size () + 1);
     return text;
 }
 
 void SetParameterFont (HWND hWnd, HFONT hFont, std::size_t offset) {
-    SendDlgItemMessage (hWnd, 1001 + offset, WM_SETFONT, (WPARAM) hFont, TRUE);
+    SendDlgItemMessage (hWnd, 1001 + (int) offset, WM_SETFONT, (WPARAM) hFont, TRUE);
 }
 
 HFONT SetFonts (HWND hWnd) {
@@ -471,8 +471,8 @@ LRESULT CALLBACK Procedure (HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
                 if (scrollbar.nPos < 0) {
                     scrollbar.nPos = 0;
                 }
-                if (scrollbar.nPos > scrollbar.nMax - scrollbar.nPage) {
-                    scrollbar.nPos = scrollbar.nMax - scrollbar.nPage + 1;
+                if (scrollbar.nPos > scrollbar.nMax - (int) scrollbar.nPage) {
+                    scrollbar.nPos = scrollbar.nMax - (int) scrollbar.nPage + 1;
                 }
                 UpdateScrollBar (hWnd);
                 InvalidateRect (hWnd, NULL, FALSE);
@@ -490,26 +490,26 @@ LRESULT CALLBACK Procedure (HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
                     }
                     break;
                 case SB_PAGEUP:
-                    if (scrollbar.nPos >= scrollbar.nPage) {
-                        scrollbar.nPos -= scrollbar.nPage;
+                    if (scrollbar.nPos >= (int) scrollbar.nPage) {
+                        scrollbar.nPos -= (int) scrollbar.nPage;
                     } else {
                         scrollbar.nPos = 0;
                     }
                     break;
                 case SB_LINEDOWN:
-                    if (scrollbar.nPos <= scrollbar.nMax - scrollbar.nPage) {
+                    if (scrollbar.nPos <= scrollbar.nMax - (int) scrollbar.nPage) {
                         scrollbar.nPos++;
                     }
                     break;
                 case SB_PAGEDOWN:
                     scrollbar.nPos += scrollbar.nPage;
-                    if (scrollbar.nPos > scrollbar.nMax - scrollbar.nPage) {
-                        scrollbar.nPos = scrollbar.nMax - scrollbar.nPage + 1;
+                    if (scrollbar.nPos > scrollbar.nMax - (int) scrollbar.nPage) {
+                        scrollbar.nPos = scrollbar.nMax - (int) scrollbar.nPage + 1;
                     }
                     break;
 
                 case SB_BOTTOM:
-                    if (scrollbar.nMax < scrollbar.nPage) {
+                    if (scrollbar.nMax < (int) scrollbar.nPage) {
                         scrollbar.nPos = scrollbar.nMax - scrollbar.nPage;
                     }
                     break;
