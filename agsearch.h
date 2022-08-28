@@ -62,9 +62,11 @@ public:
 
         bool match_ifs_and_conditional = true;
         bool match_class_struct_typename = true;
-        // TODO: ignore ": public" or ": virtual public"
+        bool match_any_inheritance_type = true;
+        bool match_any_integer_decl_style = true;
+        bool match_float_and_double_decl = true;
 
-        // TODO: matching different int declarations
+        // TODO: matching different int declarations (rather than through ignored_patterns)
         // TODO: reorder "const volatile", "static inline", 
         // TODO: ignore nontype decl specs: "static inline virtual...
 
@@ -156,13 +158,13 @@ protected:
     // reordered pattern
     //  - we need second one not to lose resuls of other kinds of matches
     //
-    std::map <location, token> reordered;
+    // std::map <location, token> reordered;
 
     // strings
     //  - unprocessed/untokenized strings for plain-text search
     //  - regular pattern contains tokenized string (searched like code)
     //
-    std::map <location, std::wstring> strings;
+    // std::map <location, std::wstring> strings;
 
 private:
 

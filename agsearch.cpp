@@ -1,8 +1,10 @@
 #include <windows.h>
 #include "agsearch.h"
-#include <algorithm>
 #include <cwctype>
 #include <cmath>
+
+#include <algorithm>
+#include <tuple>
 #include <set>
 
 namespace {
@@ -52,9 +54,28 @@ namespace {
     static const std::set <alternative_spelling> alternative_spellings = {
         { &agsearch::parameter_set::match_ifs_and_conditional, { L"if", L"?" } },
         { &agsearch::parameter_set::match_class_struct_typename, { L"class", L"struct", L"typename" } },
+        { &agsearch::parameter_set::match_float_and_double_decl, { L"float", L"double" } },
     };
     static const std::set <alternative_spelling> alternative_spellings_optional = {
         { &agsearch::parameter_set::match_ifs_and_conditional, { L"else", L":" } },
+    };
+
+    struct ignored_pattern {
+        bool agsearch::parameter_set::* option;
+        std::wstring                    prefix;
+        std::set <std::wstring>         optional;
+
+        bool operator < (const ignored_pattern & other) const noexcept {
+            return std::tie (this->prefix, this->optional)
+                 < std::tie (other.prefix, other.optional);
+        }
+    };
+    static const std::set <ignored_pattern> ignored_patterns = {
+        { &agsearch::parameter_set::match_any_inheritance_type, L":", { L"virtual", L"public", L"protected", L"private" } },
+        { &agsearch::parameter_set::match_any_integer_decl_style, L"long", { L"int", L"unsigned", L"long" } },
+        { &agsearch::parameter_set::match_any_integer_decl_style, L"short", { L"int", L"unsigned" } },
+        { &agsearch::parameter_set::match_any_integer_decl_style, L"signed", { L"char", L"short", L"int", L"long" } },
+        { &agsearch::parameter_set::match_any_integer_decl_style, L"unsigned", { L"char", L"short", L"int", L"long" } },
     };
 }
 
@@ -116,7 +137,12 @@ std::size_t agsearch::find (std::wstring_view needle_text) {
             std::uint32_t lx = 0; // length of partially found last token
 
             auto i = ipattern;
-            for (auto s = is; ; ++i, ++s) {
+            auto s = is;
+
+            const std::set <std::wstring> * ignore = nullptr;
+            bool ignore_skip_prefix = false;
+
+            while (true) {
                 if (s == es) {
 
                     auto lastfind = get_preceeding_iterator (i);
@@ -137,14 +163,40 @@ std::size_t agsearch::find (std::wstring_view needle_text) {
                 if (i == epattern)
                     return n;
 
+                // check for optional patterns
+                for (const auto & ip : ignored_patterns) {
+                    if (this->parameters.*ip.option)
+                        if (s->second.value == ip.prefix/* && s->second.type == token::type::code or idetifier*/) {
+                            ignore = &ip.optional;
+                            ignore_skip_prefix = true;
+                            break;
+                        }
+                }
+                bool skip = false;
+                if (ignore) {
+                    if (ignore_skip_prefix) {
+                        ignore_skip_prefix = false;
+                    } else {
+                        if (ignore->contains (i->second.value)) {
+                            skip = true;
+                        } else {
+                            ignore = nullptr;
+                        }
+                    }
+                }
+
                 // compare tokens properly
-                if (!this->compare_tokens (i->second, s->second,
-                                           (s == is) ? &fx : nullptr,
-                                           is_preceeding_iterator (s, es) ? &lx : nullptr))
+                auto equivalent = this->compare_tokens (i->second, s->second,
+                                                        (s == is) ? &fx : nullptr,
+                                                        is_preceeding_iterator (s, es) ? &lx : nullptr);
+                if (equivalent) {
+                    ++i;
+                    ++s;
+                } else
+                if (skip) {
+                    ++i;
+                } else
                     break;
-
-                // && not withing ignorable pattern, i.e. :birtual public where ':' is required and rest is optional
-
             }
             ++ipattern;
         }
@@ -266,13 +318,13 @@ bool agsearch::compare_tokens (const token & a, const token & b, std::uint32_t *
 
     for (auto & as : alternative_spellings) {
         if (this->parameters.*as.option)
-            if (as.spellings.count (a.value) && as.spellings.count (b.value))
+            if (as.spellings.contains (a.value) && as.spellings.contains (b.value))
                 return true;
     }
     if (a.opt_alt_spelling_allowed || b.opt_alt_spelling_allowed) {
         for (auto & as : alternative_spellings_optional)
             if (this->parameters.*as.option)
-                if (as.spellings.count (a.value) && as.spellings.count (b.value))
+                if (as.spellings.contains (a.value) && as.spellings.contains (b.value))
                     return true;
     }
 
@@ -1054,34 +1106,14 @@ void agsearch::normalize_needle () {
         }
     }
 
+    // TODO: rewrite casts
+    //  ? xxx_cast < A A A > ( B B B )
+    //  > ( A A A ) B B B
+
 }
 
 void agsearch::normalize_full () {
     this->normalize_needle ();
-
-    // combine adjacent strings
-    //  - currently limited to single row
-    //  - TODO: combine strings preceeded by L or U token properly
-    //  - BUG BUG: updated 'length' yields visually incorrect end offset, we need to introduce skip-list or something
-
-    if (false/*!this->pattern.empty ()*/) {
-        auto i = this->pattern.begin ();
-        auto j = i; ++j;
-        auto e = this->pattern.end ();
-
-        while (j != e) {
-            if ((i->second.type == token::type::string) && (j->second.type == token::type::string) && (i->first.row == j->first.row)) {
-
-                i->second.value += j->second.value;
-                i->second.length = j->first.column + j->second.length - i->first.column - i->second.length;
-
-                j = this->pattern.erase (j);
-            } else {
-                ++i;
-                ++j;
-            }
-        }
-    }
 
     // unescape strings
 
@@ -1138,7 +1170,4 @@ void agsearch::normalize_full () {
             }
         }
     }*/
-
-    // TODO: normalize order of tokens
-    // TODO: normalize order of integer specs, remove redundand words but fix location & length
 }

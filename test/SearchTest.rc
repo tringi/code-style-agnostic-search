@@ -67,4 +67,7 @@ LANGUAGE LANG_ENGLISH, SUBLANG_DEFAULT
     1027 "Ignore excessive * and / decorations in comments"
     1028 "Match if/else to conditional operator (?:)"
     1029 "Match class, struct and typename"
+    1030 "Match any inheritance type (if omitted)"
+    1031 "Match any compatible integer declaration style"
+    1032 "Match float && double when searching for the other"
 }
