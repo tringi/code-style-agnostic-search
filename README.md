@@ -11,6 +11,11 @@
 * Matching specific language tokens to their numeric values
    * `true` and `false` match 0/1
    * `NULL` and `nullptr` match 0
+* Matching semantically similar constructs user may not care for when searching
+   * `class abc` will find `struct abc` as well, `template<typename` will find `template<class`
+   * `: zzz` will find all derived from zzz, even `: virtual public zzz`
+   * `short a;` will find also `short int unsigned a;` (`short` must be first in this version)
+* Matching 
 
 * Option to ignore keyboard accelerator hints (&, Win32 GUI feature) in strings
 * Options to ignore all syntactic tokens, or braces, brackets or parentheses in particular
@@ -70,11 +75,17 @@
 
 ## TODO
 
-* match different forms of escapes, e.g.: `\n == \013`
-* match escaped characters to actual characters
-* match different notations for the same type `"unsigned int" == "int unsigned"`
+* better approach to different notations for the same type `"unsigned int" == "int unsigned"`
    * `== "std::uint32_t"` (configurable plaftorm assumptions)
-   * ignore redundant
+   * ignoring redundant
 * match different order of declaration qualifiers, e.g.: `"static inline" == "inline static"`
+* text string search
+   * match different forms of escapes, e.g.: `\n == \013`
+   * match escaped characters to actual characters
+   * right now string contents are tokenized too
+   * also do string literal combining
+
+## Future
+
+* wildcard `*` matching anything in between two code segments
 * match reinterpret_cast/static_cast to C-style cast
-* combine string literals
