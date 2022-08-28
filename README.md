@@ -15,7 +15,6 @@
    * `class abc` will find `struct abc` as well, `template<typename` will find `template<class`
    * `: zzz` will find all derived from zzz, even `: virtual public zzz`
    * `short a;` will find also `short int unsigned a;` (`short` must be first in this version)
-* Matching 
 
 * Option to ignore keyboard accelerator hints (&, Win32 GUI feature) in strings
 * Options to ignore all syntactic tokens, or braces, brackets or parentheses in particular
