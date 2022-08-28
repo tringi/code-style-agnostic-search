@@ -15,7 +15,8 @@
 ## Example program
 
 * [SearchTest.exe](https://github.com/tringi/code-style-agnostic-search/blob/main/test/SearchTest.exe?raw=true) (x64)  
-  Start the program, load any short C++ file, and try searching.
+   * start the program, load any short C++ file, and try searching; *mind interferences between options*
+   * colorized variant of the code on the right shows the internal pattern (for debugging purposes)
 
 ## Usage
 *[SearchTest.cpp](https://github.com/tringi/code-style-agnostic-search/blob/main/test/SearchTest.cpp)*
@@ -70,5 +71,4 @@
    * ignore redundant
 * match different order of declaration qualifiers, e.g.: `"static inline" == "inline static"`
 * match reinterpret_cast/static_cast to C-style cast
-* match curly braces and lack of them where appropriate, e.g. single statement after `if`
 * combine string literals
