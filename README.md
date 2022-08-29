@@ -6,7 +6,7 @@
 * Linguistic folding, diacritics and case insensitivity of tokens implemented through Windows API NLS
 * Entering query (or part) as `/*comment*/` or `"string"` searches (that part) within comments/strings only
    * orthogonal mode will search code only within code
-* Matching of `camelCase' and `snake_case` identifiers
+* Matching of `camelCase` and `snake_case` identifiers
 * Matching different numeric notations  
   `0x007B`, `0173`, `0b0'0111'1011` all match `123`  
   `0x7BuLL` matches `123.0f` unless the option to match integers and floats is turned off
