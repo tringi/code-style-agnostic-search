@@ -5,6 +5,8 @@
   `stat nlin boo` == `static inline bool`
 * Linguistic folding, diacritics and case insensitivity of tokens implemented through Windows API NLS
 * Entering query (or part) as `/*comment*/` or `"string"` searches (that part) within comments/strings only
+   * orthogonal mode will search code only within code
+* Matching of `camelCase' and `snake_case` identifiers
 * Matching different numeric notations  
   `0x007B`, `0173`, `0b0'0111'1011` all match `123`  
   `0x7BuLL` matches `123.0f` unless the option to match integers and floats is turned off
@@ -74,7 +76,6 @@
 
 ## TODO
 
-* match `camelCasing' and `snake_case` identifiers – idea by @fdwr
 * better approach to different notations for the same type `"unsigned int" == "int unsigned"`
    * `== "std::uint32_t"` (configurable plaftorm assumptions)
    * ignoring redundant
@@ -89,3 +90,8 @@
 
 * wildcard `*` matching anything in between two code segments
 * match reinterpret_cast/static_cast to C-style cast
+* improve memory usage of token
+   * union switched on type to merge exlusive members
+   * `alternative` allocated only when necessary
+* improve memory usage of pattern
+   * vector instead of map will remove a lot of pointers and improve performance
