@@ -232,15 +232,41 @@ bool agsearch::compare_tokens (const token & a, const token & b, std::uint32_t *
 
     } else {
 
-        // if I enter regular query, I want it match everything
-        //  - if I explicitly enter "string" I want it to match only strings
-        //  - if I explicitly enter //comment I want it to match only comments
+        if (this->parameters.orthogonal) {
 
-        switch (b.type) {
-            case token::type::string:
-            case token::type::comment:
-                if (a.type != b.type)
-                    return false;
+            // code/string/comment must match in orthogonal search
+            //  - for this 'numeric' and 'identifier' are equivalent
+
+            switch (b.type) {
+                case token::type::numeric:
+                case token::type::identifier:
+                    switch (a.type) {
+                        case token::type::numeric:
+                        case token::type::identifier:
+                            break;
+                        default:
+                            return false;
+                    }
+                    break;
+
+                case token::type::string:
+                case token::type::comment:
+                    if (a.type != b.type)
+                        return false;
+            }
+
+        } else {
+
+            // if I enter regular query, I want it match everything
+            //  - if I explicitly enter "string" I want it to match only strings
+            //  - if I explicitly enter //comment I want it to match only comments
+
+            switch (b.type) {
+                case token::type::string:
+                case token::type::comment:
+                    if (a.type != b.type)
+                        return false;
+            }
         }
 
         DWORD flags = 0;
@@ -275,40 +301,27 @@ bool agsearch::compare_tokens (const token & a, const token & b, std::uint32_t *
             }
         }
 
-        if (this->parameters.whole_words) {
-            if (CompareStringEx (LOCALE_NAME_INVARIANT, flags,
-                                 a.value.data (), (int) a.value.size (),
-                                 b.value.data (), (int) b.value.size (),
-                                 NULL, NULL, 0) == CSTR_EQUAL)
-                return true;
-        } else
-        if (this->parameters.individual_partial_words) {
-            if (FindNLSStringEx (LOCALE_NAME_INVARIANT, flags,
-                                 a.value.data (), (int) a.value.size (),
-                                 b.value.data (), (int) b.value.size (),
-                                 NULL, NULL, NULL, 0) != -1)
-                return true;
-        } else {
-            if (first || last) {
-                auto length = 0;
-                auto offset = FindNLSStringEx (LOCALE_NAME_INVARIANT, flags,
-                                               a.value.data (), (int) a.value.size (),
-                                               b.value.data (), (int) b.value.size (),
-                                               &length, NULL, NULL, 0);
-                if (offset != -1) {
-                    if (first) {
-                        *first = (std::uint32_t) offset;
-                    }
-                    if (last) {
-                        *last = (std::uint32_t) (a.value.size () - length - offset);
-                    }
+        // compare values
+
+        if (this->compare_strings (flags, a.value, b.value, first, last))
+            return true;
+
+        // compare alternative
+
+        bool aa = !a.alternative.empty ();
+        bool ab = !b.alternative.empty ();
+
+        if (aa || ab) {
+            if (ab) {
+                if (this->compare_strings (flags, a.value, b.alternative, first, last))
                     return true;
-                }
-            } else {
-                if (CompareStringEx (LOCALE_NAME_INVARIANT, flags,
-                                     a.value.data (), (int) a.value.size (),
-                                     b.value.data (), (int) b.value.size (),
-                                     NULL, NULL, 0) == CSTR_EQUAL)
+            }
+            if (aa) {
+                if (this->compare_strings (flags, a.alternative, b.value, first, last))
+                    return true;
+            }
+            if (aa && ab) {
+                if (this->compare_strings (flags, a.alternative, b.alternative, first, last))
                     return true;
             }
         }
@@ -328,6 +341,47 @@ bool agsearch::compare_tokens (const token & a, const token & b, std::uint32_t *
                     return true;
     }
 
+    return false;
+}
+
+bool agsearch::compare_strings (DWORD flags, const std::wstring & a, const std::wstring & b, std::uint32_t * first, std::uint32_t * last) {
+    if (this->parameters.whole_words) {
+        if (CompareStringEx (LOCALE_NAME_INVARIANT, flags,
+                             a.data (), (int) a.size (),
+                             b.data (), (int) b.size (),
+                             NULL, NULL, 0) == CSTR_EQUAL)
+            return true;
+    } else
+    if (this->parameters.individual_partial_words) {
+        if (FindNLSStringEx (LOCALE_NAME_INVARIANT, flags,
+                                a.data (), (int) a.size (),
+                                b.data (), (int) b.size (),
+                                NULL, NULL, NULL, 0) != -1)
+            return true;
+    } else {
+        if (first || last) {
+            auto length = 0;
+            auto offset = FindNLSStringEx (LOCALE_NAME_INVARIANT, flags,
+                                            a.data (), (int) a.size (),
+                                            b.data (), (int) b.size (),
+                                            &length, NULL, NULL, 0);
+            if (offset != -1) {
+                if (first) {
+                    *first = (std::uint32_t) offset;
+                }
+                if (last) {
+                    *last = (std::uint32_t) (a.size () - length - offset);
+                }
+                return true;
+            }
+        } else {
+            if (CompareStringEx (LOCALE_NAME_INVARIANT, flags,
+                                    a.data (), (int) a.size (),
+                                    b.data (), (int) b.size (),
+                                    NULL, NULL, 0) == CSTR_EQUAL)
+                return true;
+        }
+    }
     return false;
 }
 
@@ -1068,6 +1122,23 @@ void agsearch::append_token (wchar_t c) {
     return this->append_token (std::wstring_view (&c, 1), 1);
 }
 
+namespace {
+
+    //
+    std::size_t is_eligible_for_camelcasing (std::wstring_view sv) {
+        auto i = sv.find_first_not_of (L'_');
+        if (i != std::wstring_view::npos) { // not only undescores
+            sv.remove_prefix (i);
+            sv.remove_suffix (sv.length () - (sv.find_last_not_of (L'_') + 1));
+
+            
+
+        }
+        return 0;
+    }
+
+}
+
 void agsearch::normalize_needle () {
 
     // detect which ':' can be converted into else
@@ -1102,6 +1173,58 @@ void agsearch::normalize_needle () {
                         token.value.erase (i, 1);
                     }
                 }
+            }
+        }
+    }
+
+    // create alternative "camelCaseIdentifiers" for all "snake_case_identifiers
+
+    if (this->parameters.match_snake_and_camel_casing) {
+        for (auto & [location, token] : this->pattern) {
+            switch (token.type) {
+                case token::type::identifier:
+                case token::type::comment:
+                case token::type::string:
+                    
+                    // is eligible for camelcasing
+                    //  - if, ignoring prefix and suffix underscores, contains sole underscores between words
+
+                    auto leading = token.value.find_first_not_of (L'_');
+                    if (leading != std::wstring::npos) {
+
+                        std::wstring_view sv (token.value);
+                        sv.remove_prefix (leading);
+
+                        auto trailing = sv.length () - (sv.find_last_not_of (L'_') + 1);
+                        sv.remove_suffix (trailing);
+
+                        // count underscores followed by letter
+
+                        std::size_t underscores = 0;
+                        for (std::size_t i = 0; i != sv.length () - 1; ++i) {
+                            if ((sv [i] == L'_') && std::iswalpha (sv [i + 1]))
+                                ++underscores;
+                        }
+
+                        // eligible, create alternative version
+
+                        if (underscores) {
+                            token.alternative.reserve (token.value.length () - underscores);
+                            token.alternative.append (leading, L'_');
+
+                            for (std::size_t i = 0; i < sv.length () - 1; ++i) {
+                                if ((sv [i] == L'_') && std::iswalpha (sv [i + 1])) {
+                                    token.alternative.append (1, std::towupper (sv [i + 1]));
+                                    ++i;
+                                } else {
+                                    token.alternative.append (1, sv [i]);
+                                }
+                            }
+
+                            token.alternative.append (1, sv.back ());
+                            token.alternative.append (trailing, L'_');
+                        }
+                    }
             }
         }
     }

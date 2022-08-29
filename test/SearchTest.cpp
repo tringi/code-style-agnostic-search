@@ -271,9 +271,20 @@ void Paint (HDC hDC, RECT rc) {
                  rc.top + (character.cy - 2) * location.row + 7 - height * scrollbar.nPos,
                  token.value.c_str (), (int) token.value.length ());
 
-        /*switch (token.type) {
-            case token::type::numeric:
-                SetBkMode (hDC, TRANSPARENT);
+        switch (token.type) {
+            case search::token::type::identifier:
+                /*if (token.alternative.length ()) {
+                    SetBkMode (hDC, TRANSPARENT);
+                    SetTextColor (hDC, 0xAA88AA);
+
+                    TextOut (hDC,
+                             rc.left + character.cx * (location.column + token.alternative.length () + 16),
+                             rc.top + (character.cy - 2) * location.row + 7 - height * scrollbar.nPos,
+                             token.alternative.c_str (), token.alternative.length ());
+                }// */
+                break;
+            case search::token::type::numeric:
+                /*SetBkMode (hDC, TRANSPARENT);
                 SetTextColor (hDC, 0xAA88AA);
 
                 wchar_t buffer [64];
@@ -282,9 +293,9 @@ void Paint (HDC hDC, RECT rc) {
                 TextOut (hDC,
                          r.left + character.cx * (location.column + token.value.length () + 2),
                          r.top + (character.cy - 2) * location.row,
-                         buffer, std::wcslen (buffer));
+                         buffer, std::wcslen (buffer));*/
                 break;
-        }*/
+        }
 
         switch (token.string_type) {
             case 'L':
@@ -371,9 +382,10 @@ HFONT SetFonts (HWND hWnd) {
                           return TRUE;
                       }, (LPARAM) hFont);
     
-    SetParameterFont (hWnd, hBoldFont, offsetof (agsearch::parameter_set, whole_words));
     SetParameterFont (hWnd, hBoldFont, offsetof (agsearch::parameter_set, individual_partial_words));
+    SetParameterFont (hWnd, hBoldFont, offsetof (agsearch::parameter_set, orthogonal));
     SetParameterFont (hWnd, hBoldFont, offsetof (agsearch::parameter_set, numbers));
+    SetParameterFont (hWnd, hBoldFont, offsetof (agsearch::parameter_set, match_snake_and_camel_casing));
     return hCodeFont;
 }
 

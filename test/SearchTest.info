@@ -9,9 +9,9 @@
 	internalname	= SearchTest
 
 	major = 1
-	minor = 0
+	minor = 1
 	patch = 0
-	build = 479
+	build = 497
 
 [versioninfo]
 	filename	= %dir%\%internalname%-vi.rc

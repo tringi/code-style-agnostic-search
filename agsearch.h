@@ -18,6 +18,7 @@ public:
     struct parameter_set {
         bool whole_words = false; // match only whole words
         bool individual_partial_words = false; // match partial words even individually
+        bool orthogonal = false; // match code in code only, strings in string, and comments in comments
 
         bool case_insensitive_numbers = true;
         bool case_insensitive_strings = true;
@@ -60,6 +61,7 @@ public:
 
         // token transformations
 
+        bool match_snake_and_camel_casing = true;
         bool match_ifs_and_conditional = true;
         bool match_class_struct_typename = true;
         bool match_any_inheritance_type = true;
@@ -138,6 +140,7 @@ public:
         };
 
         std::wstring  value;
+        std::wstring  alternative; // camel case version, if applicable
         std::uint32_t length = 0; // original length
         type          type {};
         char          string_type = 0; // 0, 'L', 'u', 'U', '8', 'R'
@@ -186,6 +189,7 @@ private:
     void normalize_needle ();
     void normalize_full ();
     bool compare_tokens (const token &, const token &, std::uint32_t * first, std::uint32_t * last);
+    bool compare_strings (DWORD flags, const std::wstring &, const std::wstring &, std::uint32_t * first, std::uint32_t * last);
     void process_text (std::wstring_view text);
     void process_line (std::wstring_view line);
 
