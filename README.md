@@ -74,6 +74,7 @@
 
 ## TODO
 
+* match `camelCasing' and `snake_case` identifiers – idea by @fdwr
 * better approach to different notations for the same type `"unsigned int" == "int unsigned"`
    * `== "std::uint32_t"` (configurable plaftorm assumptions)
    * ignoring redundant
