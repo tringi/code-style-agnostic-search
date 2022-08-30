@@ -5,7 +5,7 @@
   `stat nlin boo` == `static inline bool`
 * Linguistic folding, diacritics and case insensitivity of tokens through Windows API NLS [[img](https://github.com/tringi/code-style-agnostic-search/blob/main/test/img/search-nls.png)]
 * Entering query (or part) as `/*comment*/` or `"string"` searches (that part) within comments/strings only [[img](https://github.com/tringi/code-style-agnostic-search/blob/main/test/img/search-for-comment.png)]
-   * orthogonal mode will search code only within code [[img](https://github.com/tringi/code-style-agnostic-search/blob/main/test/img/search-no-comment.png)]
+   * orthogonal mode will search code only within code [[img](https://github.com/tringi/code-style-agnostic-search/blob/main/test/img/search-not-comment.png)]
 * Matching of `camelCase` and `snake_case` identifiers [[img](https://github.com/tringi/code-style-agnostic-search/blob/main/test/img/search-camel-snake.png)]
 * Matching different numeric notations [[img](https://github.com/tringi/code-style-agnostic-search/blob/main/test/img/search-numbers.png)]  
   `0x007B`, `0173`, `0b0'0111'1011` all match `123`  
