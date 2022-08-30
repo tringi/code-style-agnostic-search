@@ -8,10 +8,6 @@
 #include <cstddef>
 #include "../agsearch.h"
 
-#ifndef IS_TEXT_UNICODE_UTF8
-#define IS_TEXT_UNICODE_UTF8 0x0800
-#endif
-
 std::vector <std::wstring> file;
 std::vector <std::pair <agsearch::location, agsearch::location>> results;
 
@@ -57,6 +53,10 @@ public:
 
 #ifndef CP_UTF16
 #define CP_UTF16 1200
+#endif
+
+#ifndef IS_TEXT_UNICODE_UTF8
+#define IS_TEXT_UNICODE_UTF8 0x0800
 #endif
 
 extern "C" IMAGE_DOS_HEADER __ImageBase;
