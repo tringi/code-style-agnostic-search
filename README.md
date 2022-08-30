@@ -58,7 +58,6 @@
     
         search.load (text);         // 'text' is container of std::wstring_view
         search.append (line);       // 'line' is single line of code std::wstring_view
-        search.replace (row, line); // 'row' is row index to replace
     
         // ...
     

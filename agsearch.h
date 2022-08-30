@@ -88,6 +88,10 @@ public:
     };
 
 public:
+
+    // clear
+    //  - 
+    //
     void clear ();
 
     // append
@@ -98,12 +102,6 @@ public:
         this->process_text (text);
         this->normalize_full ();
     }
-    
-    // replace
-    //  - 
-    //  - string 'line' MUST NOT contain multiple lines
-    //
-    void replace (std::uint32_t row, std::wstring_view line);
 
     // load
     //  - load text from container of wstring_views

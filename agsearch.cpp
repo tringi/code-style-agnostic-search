@@ -86,14 +86,6 @@ void agsearch::clear () {
     this->current.location.column = 0;
 }
 
-void agsearch::replace (std::uint32_t row, std::wstring_view line) {
-    this->pattern.erase (this->pattern.lower_bound ({ row + 0, 0 }),
-                         this->pattern.lower_bound ({ row + 1, 0 }));
-    this->current.location.row = row;
-    this->process_text (line);
-    this->normalize_full ();
-}
-
 namespace {
     template <typename IT>
     inline IT get_preceeding_iterator (IT it) {
