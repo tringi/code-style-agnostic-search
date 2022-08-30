@@ -1,16 +1,16 @@
 # Coding Style -agnostic (and more) search for C++
 
-* Ignores insignificant whitespace; including line endings
-* Individual partial words matching, on top of classic whole word matching on/off modes  
+* Ignores insignificant whitespace; including line endings [[img](https://github.com/tringi/code-style-agnostic-search/blob/main/test/img/search-whitespace-and-partial.png)]
+* Individual partial words matching, on top of classic whole word matching on/off modes [[img](https://github.com/tringi/code-style-agnostic-search/blob/main/test/img/search-whitespace-and-partial.png)]  
   `stat nlin boo` == `static inline bool`
-* Linguistic folding, diacritics and case insensitivity of tokens implemented through Windows API NLS
-* Entering query (or part) as `/*comment*/` or `"string"` searches (that part) within comments/strings only
-   * orthogonal mode will search code only within code
-* Matching of `camelCase` and `snake_case` identifiers
-* Matching different numeric notations  
+* Linguistic folding, diacritics and case insensitivity of tokens through Windows API NLS [[img](https://github.com/tringi/code-style-agnostic-search/blob/main/test/img/search-nls.png)]
+* Entering query (or part) as `/*comment*/` or `"string"` searches (that part) within comments/strings only [[img](https://github.com/tringi/code-style-agnostic-search/blob/main/test/img/search-for-comment.png)]
+   * orthogonal mode will search code only within code [[img](https://github.com/tringi/code-style-agnostic-search/blob/main/test/img/search-no-comment.png)]
+* Matching of `camelCase` and `snake_case` identifiers [[img](https://github.com/tringi/code-style-agnostic-search/blob/main/test/img/search-camel-snake.png)]
+* Matching different numeric notations [[img](https://github.com/tringi/code-style-agnostic-search/blob/main/test/img/search-numbers.png)]  
   `0x007B`, `0173`, `0b0'0111'1011` all match `123`  
   `0x7BuLL` matches `123.0f` unless the option to match integers and floats is turned off
-* Matching specific language tokens to their numeric values
+* Matching specific language tokens to their numeric values [[img](https://github.com/tringi/code-style-agnostic-search/blob/main/test/img/search-zeros.png)]
    * `true` and `false` match 0/1
    * `NULL` and `nullptr` match 0
 * Matching semantically similar constructs user may not care for when searching
@@ -18,11 +18,11 @@
    * `: zzz` will find all derived from zzz, even `: virtual public zzz`
    * `short a;` will find also `short int unsigned a;` (`short` must be first in this version)
 
-* Option to ignore keyboard accelerator hints (&, Win32 GUI feature) in strings
-* Options to ignore all syntactic tokens, or braces, brackets or parentheses in particular
+* Option to ignore keyboard accelerator hints (&, Win32 GUI feature) in strings [[img](https://github.com/tringi/code-style-agnostic-search/blob/main/test/img/search-rsrc-accels.png)]
+* Options to ignore all syntactic tokens, or braces, brackets or parentheses in particular [[img](https://github.com/tringi/code-style-agnostic-search/blob/main/test/img/search-no-syntactic-tokens.png)]
    * For commas or semicolons it's either all or trailing only
-* Matching digraphs, trigraphs and ISO646 alternative tokens to primary tokens they represent
-* Removes `*` and `/` decorations from comments before searching
+* Matching digraphs, trigraphs and ISO646 alternative tokens to primary tokens they represent [[img](https://github.com/tringi/code-style-agnostic-search/blob/main/test/img/search-iso646.png)]
+* Removes `*` and `/` decorations from comments before searching [[img](https://github.com/tringi/code-style-agnostic-search/blob/main/test/img/search-multiline-comments.png)]
 
 ## Example program
 
