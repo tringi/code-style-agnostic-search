@@ -120,8 +120,8 @@ std::size_t agsearch::find (std::wstring_view needle_text) {
         auto is = needle.pattern.cbegin ();
         auto es = needle.pattern.cend ();
 
-        location prev_b = { -1, -1 };
-        location prev_e = { -1, -1 };
+        location prev_b = { (std::uint32_t) -1, (std::uint32_t) -1 };
+        location prev_e = { (std::uint32_t) -1, (std::uint32_t) -1 };
         std::size_t n = 0;
 
         while (true) {
