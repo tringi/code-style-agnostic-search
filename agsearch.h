@@ -6,14 +6,15 @@
 #include <map>
 
 // agsearch
-//  - 
+//  - coding style -agnostic searcher
 //  - https://github.com/tringi/code-style-agnostic-search
 //
 class agsearch {
 public:
 
     // parameters
-    //  - 
+    //  - search options
+    //  - majority is used on 'load'/'append' and the source must be reloaded on change of parameters
     //
     struct parameter_set {
         bool whole_words = false; // match only whole words
@@ -129,6 +130,8 @@ public:
     //  - represents an element of pre-processed source text
     //
     struct token {
+        location     location;
+
         enum class type : std::uint8_t {
             code = 0,
             string,
@@ -154,7 +157,7 @@ protected:
     // pattern
     //  - processed, converted and folded (according to 'parameters') source text
     //
-    std::map <location, token> pattern;
+    std::vector <token> pattern;
 
     // reordered pattern
     //  - we need second one not to lose resuls of other kinds of matches

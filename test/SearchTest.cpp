@@ -251,7 +251,7 @@ void Paint (HDC hDC, RECT rc) {
 
     SetBkColor (hDC, 0xEEEEEE);
 
-    for (auto & [location, token] : search.pattern) {
+    for (auto & token : search.pattern) {
         switch (token.type) {
             case search::token::type::code: SetTextColor (hDC, 0x000000); break;
             case search::token::type::string: SetTextColor (hDC, 0x2233CC); break;
@@ -267,8 +267,8 @@ void Paint (HDC hDC, RECT rc) {
         }
 
         TextOut (hDC,
-                 rc.left + character.cx * location.column,
-                 rc.top + (character.cy - 2) * location.row + 7 - height * scrollbar.nPos,
+                 rc.left + character.cx * token.location.column,
+                 rc.top + (character.cy - 2) * token.location.row + 7 - height * scrollbar.nPos,
                  token.value.c_str (), (int) token.value.length ());
 
         switch (token.type) {
@@ -306,8 +306,8 @@ void Paint (HDC hDC, RECT rc) {
                 SetBkMode (hDC, TRANSPARENT);
                 wchar_t st = token.string_type;
                 TextOut (hDC,
-                         rc.left + character.cx * location.column - 2 * character.cx / 3,
-                         rc.top + (character.cy - 2) * location.row + character.cy / 2 + 7 - height * scrollbar.nPos,
+                         rc.left + character.cx * token.location.column - 2 * character.cx / 3,
+                         rc.top + (character.cy - 2) * token.location.row + character.cy / 2 + 7 - height * scrollbar.nPos,
                          &st, 1);
                 break;
         }

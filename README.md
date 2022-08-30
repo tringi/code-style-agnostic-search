@@ -92,5 +92,3 @@
 * improve memory usage of token
    * union switched on type to merge exlusive members
    * `alternative` allocated only when necessary
-* improve memory usage of pattern
-   * vector instead of map will remove a lot of pointers and improve performance

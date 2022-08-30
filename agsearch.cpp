@@ -138,8 +138,8 @@ std::size_t agsearch::find (std::wstring_view needle_text) {
                 if (s == es) {
 
                     auto lastfind = get_preceeding_iterator (i);
-                    location found_b = { ipattern->first.row, ipattern->first.column + fx };
-                    location found_e = { lastfind->first.row, lastfind->first.column + lastfind->second.length - lx };
+                    location found_b = { ipattern->location.row, ipattern->location.column + fx };
+                    location found_e = { lastfind->location.row, lastfind->location.column + lastfind->length - lx };
 
                     if (this->found (needle_text, n++, found_b, found_e)) {
                         std::advance (ipattern, needle.pattern.size () - 1);
@@ -158,7 +158,7 @@ std::size_t agsearch::find (std::wstring_view needle_text) {
                 // check for optional patterns
                 for (const auto & ip : ignored_patterns) {
                     if (this->parameters.*ip.option)
-                        if (s->second.value == ip.prefix/* && s->second.type == token::type::code or idetifier*/) {
+                        if (s->value == ip.prefix/* && s->second.type == token::type::code or idetifier*/) {
                             ignore = &ip.optional;
                             ignore_skip_prefix = true;
                             break;
@@ -169,7 +169,7 @@ std::size_t agsearch::find (std::wstring_view needle_text) {
                     if (ignore_skip_prefix) {
                         ignore_skip_prefix = false;
                     } else {
-                        if (ignore->contains (i->second.value)) {
+                        if (ignore->contains (i->value)) {
                             skip = true;
                         } else {
                             ignore = nullptr;
@@ -178,7 +178,7 @@ std::size_t agsearch::find (std::wstring_view needle_text) {
                 }
 
                 // compare tokens properly
-                auto equivalent = this->compare_tokens (i->second, s->second,
+                auto equivalent = this->compare_tokens (*i, *s,
                                                         (s == is) ? &fx : nullptr,
                                                         is_preceeding_iterator (s, es) ? &lx : nullptr);
                 if (equivalent) {
@@ -855,7 +855,7 @@ next:
                             // encode string prefix, e.g.: 'L' in L'x' 
 
                             if (!this->pattern.empty ()) {
-                                auto & last = this->pattern.crbegin ()->second;
+                                auto & last = *this->pattern.crbegin ();
                                 if ((last.type == token::type::identifier) && (last.value.length () == 1)) {
 
                                     this->current.string_type = (char) last.value [0];
@@ -883,7 +883,7 @@ next:
                         // encode string prefix, e.g.: 'L' in L"string" 
 
                         if (!this->pattern.empty ()) {
-                            auto & last = this->pattern.crbegin ()->second;
+                            auto & last = *this->pattern.crbegin ();
                             if ((last.type == token::type::identifier) && (last.value.length () == 1)) {
                                 
                                 this->current.string_type = (char) last.value [0];
@@ -1057,6 +1057,7 @@ std::wstring agsearch::fold (std::wstring_view value) {
 
 void agsearch::append_token (std::wstring_view value, std::size_t advance) {
     token t;
+    t.location = this->current.location;
     t.type = this->current.mode;
     t.value = value;
     t.length = (std::uint32_t) advance;
@@ -1065,12 +1066,14 @@ void agsearch::append_token (std::wstring_view value, std::size_t advance) {
         t.string_type = this->current.string_type;
     }
 
-    this->pattern.insert ({ this->current.location, t });
+    this->pattern.push_back (t);
     this->current.location.column += (std::uint32_t) advance;
 }
 
 void agsearch::append_identifier (std::wstring_view value, std::size_t advance) {
     token t;
+    t.location = this->current.location;
+
     if (this->current.mode == token::type::code) {
         t.type = token::type::identifier;
     } else {
@@ -1083,12 +1086,14 @@ void agsearch::append_identifier (std::wstring_view value, std::size_t advance) 
     t.value = this->fold (value);
     t.length = (std::uint32_t) advance;
 
-    this->pattern.insert ({ this->current.location, t });
+    this->pattern.push_back (t);
     this->current.location.column += (std::uint32_t) advance;
 }
 
 void agsearch::append_numeric (std::wstring_view value, std::uint64_t i, double * d, std::size_t advance) {
     token t;
+    t.location = this->current.location;
+
     if (this->current.mode == token::type::code) {
         t.type = token::type::numeric;
     } else {
@@ -1106,7 +1111,7 @@ void agsearch::append_numeric (std::wstring_view value, std::uint64_t i, double 
         t.is_decimal = true;
     }
 
-    this->pattern.insert ({ this->current.location, t });
+    this->pattern.push_back (t);
     this->current.location.column += (std::uint32_t) advance;
 }
 
@@ -1137,7 +1142,7 @@ void agsearch::normalize_needle () {
 
     if (this->parameters.match_ifs_and_conditional) {
         auto n = 0u;
-        for (auto & [location, token] : this->pattern) {
+        for (auto & token : this->pattern) {
             if (token.value == L"?") {
                 ++n;
             } else
@@ -1152,7 +1157,7 @@ void agsearch::normalize_needle () {
     //  - removes sole '&' inside strings; NOTE that string are tokenized too, so it may not always work
 
     if (this->parameters.ignore_accelerator_hints_in_strings) {
-        for (auto & [location, token] : this->pattern) {
+        for (auto & token : this->pattern) {
             if (token.type == token::type::string) {
 
                 auto i = std::wstring::npos;
@@ -1172,7 +1177,7 @@ void agsearch::normalize_needle () {
     // create alternative "camelCaseIdentifiers" for all "snake_case_identifiers
 
     if (this->parameters.match_snake_and_camel_casing) {
-        for (auto & [location, token] : this->pattern) {
+        for (auto & token : this->pattern) {
             switch (token.type) {
                 case token::type::identifier:
                 case token::type::comment:
