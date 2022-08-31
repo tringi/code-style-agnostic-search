@@ -1119,23 +1119,6 @@ void agsearch::append_token (wchar_t c) {
     return this->append_token (std::wstring_view (&c, 1), 1);
 }
 
-namespace {
-
-    //
-    std::size_t is_eligible_for_camelcasing (std::wstring_view sv) {
-        auto i = sv.find_first_not_of (L'_');
-        if (i != std::wstring_view::npos) { // not only undescores
-            sv.remove_prefix (i);
-            sv.remove_suffix (sv.length () - (sv.find_last_not_of (L'_') + 1));
-
-            
-
-        }
-        return 0;
-    }
-
-}
-
 void agsearch::normalize_needle () {
 
     // detect which ':' can be converted into else
