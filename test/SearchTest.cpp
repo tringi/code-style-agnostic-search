@@ -24,6 +24,19 @@ struct search : agsearch {
         return true;
     }
 
+    std::size_t usage () const {
+        auto cb = this->pattern.size () * sizeof (token);
+        for (const auto & token : this->pattern) {
+            if (token.value.length () >= 8) {
+                cb += token.value.length () * sizeof (wchar_t) + 8; // allocation overhead guess
+            }
+            if (token.alternative.length () >= 8) {
+                cb += token.alternative.length () * sizeof (wchar_t) + 8; // allocation overhead guess
+            }
+        }
+        return cb;
+    }
+
 public:
     LARGE_INTEGER perfhz;
     LARGE_INTEGER perfT0;
@@ -39,9 +52,11 @@ public:
         auto t = 1000.0 * double (perfT1.QuadPart - this->perfT0.QuadPart) / double (this->perfhz.QuadPart);
 
         wchar_t report [256];
-        std::swprintf (report, 256, L"%u results in %.2f ms (%s)",
-                       (unsigned) results.size (), t,
-                       full ? L"FULL RESCAN AND SEARCH" : L"search only");
+        std::swprintf (report, 256, L"%zu results in %.2f ms (%s) from %zu kB (%zu tokens)",
+                       results.size (), t,
+                       full ? L"FULL RESCAN AND SEARCH" : L"search only",
+                       this->usage () / 1024, this->pattern.size ());
+
         SetDlgItemText (hWnd, 902, report);
         InvalidateRect (hWnd, NULL, FALSE);
     }
@@ -661,7 +676,7 @@ LPCTSTR Initialize (HINSTANCE hInstance) {
 int CALLBACK wWinMain (_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow) {
     InitCommonControls ();
     BufferedPaintInit ();
-
+    
     if (auto atom = Initialize (hInstance)) {
         auto menu = LoadMenu (hInstance, MAKEINTRESOURCE (1));
         auto accs = LoadAccelerators (hInstance, MAKEINTRESOURCE (1));
