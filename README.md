@@ -79,6 +79,8 @@
    * `== "std::uint32_t"` (configurable plaftorm assumptions)
    * ignoring redundant
 * match different order of declaration qualifiers, e.g.: `"static inline" == "inline static"`
+* match `int main(???)` to `auto main(???) -> int`
+* match `()` and `(void)`
 * text string search
    * match different forms of escapes, e.g.: `\n == \013`
    * match escaped characters to actual characters
