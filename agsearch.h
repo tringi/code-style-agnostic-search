@@ -69,6 +69,7 @@ public:
         bool match_any_inheritance_type = true;
         bool match_any_integer_decl_style = true;
         bool match_float_and_double_decl = true;
+        bool match_using_and_typedef = false;
 
         // TODO: matching different int declarations (rather than through ignored_patterns)
         // TODO: reorder "const volatile", "static inline", 
@@ -152,6 +153,8 @@ public:
         std::uint64_t integer = 0;
         double        decimal = 0.0;
     };
+
+    static const auto xxx = sizeof (token);
 
 protected:
 

@@ -55,6 +55,7 @@ namespace {
         { &agsearch::parameter_set::match_ifs_and_conditional, { L"if", L"?" } },
         { &agsearch::parameter_set::match_class_struct_typename, { L"class", L"struct", L"typename" } },
         { &agsearch::parameter_set::match_float_and_double_decl, { L"float", L"double" } },
+        { &agsearch::parameter_set::match_using_and_typedef, { L"using", L"typedef" } },
     };
     static const std::set <alternative_spelling> alternative_spellings_optional = {
         { &agsearch::parameter_set::match_ifs_and_conditional, { L"else", L":" } },

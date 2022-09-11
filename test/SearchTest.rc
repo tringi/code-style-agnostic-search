@@ -72,4 +72,5 @@ LANGUAGE LANG_ENGLISH, SUBLANG_DEFAULT
     1032 "Match any inheritance type (if omitted)"
     1033 "Match any compatible integer declaration style"
     1034 "Match float && double when searching for the other"
+    1035 "Match using and typedef"
 }
