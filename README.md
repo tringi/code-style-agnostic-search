@@ -33,39 +33,41 @@
 ## Usage
 *[SearchTest.cpp](https://github.com/tringi/code-style-agnostic-search/blob/main/test/SearchTest.cpp)*
 
-    #include "agsearch.h"
-    
-    struct search : public agsearch {
-        std::vector <std::pair <location, location>> results;
-    
-        std::size_t find (std::wstring_view needle) {
-            this->results.clear ();
-            return this->agsearch::find (needle);
-        }
-    
-    private:
-        bool found (std::wstring_view needle, std::size_t i, location begin, location end) override {
-            this->results.push_back ({ begin, end });
-            return true;
-        }
-    } search;
-    
-    int main () {
-    
-        // ...
-    
-        search.parameters.whole_words = false; // configure the engine
-    
-        search.load (text);         // 'text' is container of std::wstring_view
-        search.append (line);       // 'line' is single line of code std::wstring_view
-    
-        // ...
-    
-        search.find (needle); // 'needle' is code to be searched for
-        search.results;       // contains pair of 'location' for every found instance
-    
-        // ...
+```cpp
+#include "agsearch.h"
+
+struct search : public agsearch {
+    std::vector <std::pair <location, location>> results;
+
+    std::size_t find (std::wstring_view needle) {
+        this->results.clear ();
+        return this->agsearch::find (needle);
     }
+
+private:
+    bool found (std::wstring_view needle, std::size_t i, location begin, location end) override {
+        this->results.push_back ({ begin, end });
+        return true;
+    }
+} search;
+
+int main () {
+
+    // ...
+
+    search.parameters.whole_words = false; // configure the engine
+
+    search.load (text);         // 'text' is container of std::wstring_view
+    search.append (line);       // 'line' is single line of code std::wstring_view
+
+    // ...
+
+    search.find (needle); // 'needle' is code to be searched for
+    search.results;       // contains pair of 'location' for every found instance
+
+    // ...
+}
+```
 
 **Notes:**
 
